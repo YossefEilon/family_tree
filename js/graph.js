@@ -1,7 +1,7 @@
 import { globalState, nodeWidth, nodeHeight } from './config.js';
 import { createNodeCard, createActionBubbles, showNodeDetailsById, filterFamilyById } from './ui.js';
 
-export let svg, g, zoom, simulation;
+export let svg, g, zoom;
 
 export function initD3Graph() {
     svg = d3.select("#tree-canvas");
@@ -19,13 +19,9 @@ export function initD3Graph() {
     });
     svg.call(zoom);
     resizeCanvas();
-
-    // 1. WE DISABLED ALL PHYSICS
-    // We removed 'collide', 'charge', 'forceX', and 'forceY'. 
-    // This stops nodes from floating randomly and turns D3 into a simple drawing tool.
-    simulation = d3.forceSimulation()
-        .force("link", d3.forceLink().id(d => d.id).strength(0))
-        .alphaDecay(1); 
+    
+    // PHYSICS ENGINE COMPLETELY REMOVED. 
+    // We now use a strict mathematical static rendering grid.
 }
 
 export function resizeCanvas() {
@@ -34,17 +30,21 @@ export function resizeCanvas() {
     }
 }
 
-// 2. THE RIGID MATH GRID
-// This algorithm calculates exact coordinates (fx, fy) for every single node.
+// 1. THE RIGID MATH GRID
+// Calculates immutable X and Y coordinates for every node, ignoring all physics.
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
-    // Unconditional sorting prevents the API from randomly shifting left/right placements
-    nodes.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
-    const levels = {};
     
+    // Unconditional sorting guarantees the tree never swaps left/right on reload
+    nodes.sort((a, b) => {
+        const birthA = parseInt(a.birth) || 9999;
+        const birthB = parseInt(b.birth) || 9999;
+        return birthA !== birthB ? birthA - birthB : String(a.id).localeCompare(String(b.id));
+    });
+
+    const levels = {};
     nodes.forEach(n => {
         const l = parseInt(n.level || 0);
         if (!levels[l]) levels[l] = [];
@@ -55,6 +55,7 @@ function calculateDeterministicGrid(nodes, links) {
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
 
+    // Traverse row by row
     Object.keys(levels).sort((a, b) => a - b).forEach(lvl => {
         const currentY = lvl * 280 + 150;
         let currentX = 0;
@@ -62,7 +63,7 @@ function calculateDeterministicGrid(nodes, links) {
         levels[lvl].forEach(node => {
             if (placed.has(node.id)) return;
 
-            // Find if this node is married
+            // Search for spouse connections
             const spouseLink = links.find(l => l.type === 'spouse' && (
                 (l.source.id || l.source) === node.id || (l.target.id || l.target) === node.id
             ));
@@ -73,64 +74,69 @@ function calculateDeterministicGrid(nodes, links) {
                 const partnerId = sId === node.id ? tId : sId;
                 const partner = nodeMap.get(partnerId);
 
-                // Lock couple directly side-by-side
+                // Lock spouses symmetrically side-by-side
                 if (partner && partner.level == node.level && !placed.has(partner.id)) {
-                    node.fx = currentX; node.fy = currentY;
                     node.x = currentX; node.y = currentY;
-
-                    partner.fx = currentX + 260; partner.fy = currentY;
                     partner.x = currentX + 260; partner.y = currentY;
 
                     placed.add(node.id);
                     placed.add(partner.id);
 
-                    // Find and strictly center children directly under this couple
-                    const children = nodes.filter(n => links.some(l => 
+                    // Map all children belonging to this specific couple
+                    const sharedChildren = nodes.filter(n => links.some(l => 
                         (l.type === 'parent' || !l.type) && 
                         ((l.source.id || l.source) === node.id || (l.source.id || l.source) === partner.id) && 
                         (l.target.id || l.target) === n.id
                     ));
 
-                    if (children.length > 0) {
-                        const midX = (node.fx + partner.fx) / 2;
-                        let childX = midX - ((children.length - 1) * 280) / 2;
+                    // Center children perfectly underneath the midpoint of the parents
+                    if (sharedChildren.length > 0) {
+                        const midX = (node.x + partner.x) / 2;
+                        let childX = midX - ((sharedChildren.length - 1) * 280) / 2;
                         const childY = (parseInt(lvl) + 1) * 280 + 150;
 
-                        children.sort((a,b) => String(a.id).localeCompare(String(b.id))).forEach((child, i) => {
+                        sharedChildren.sort((a,b) => String(a.id).localeCompare(String(b.id))).forEach((child, i) => {
                             if (!placed.has(child.id)) {
-                                child.fx = childX + (i * 280);
-                                child.fy = childY;
-                                child.x = child.fx; child.y = child.fy;
+                                child.x = childX + (i * 280);
+                                child.y = childY;
+                                child.level = parseInt(lvl) + 1; // Force strict level hierarchy
                                 placed.add(child.id);
                             }
                         });
                     }
-                    currentX += 560;
+                    currentX += 560; // Offset spacing for next couple
                     return;
                 }
             }
 
-            // Lock single (unmarried) nodes
-            node.fx = currentX; node.fy = currentY;
+            // Lock single unmarried nodes
             node.x = currentX; node.y = currentY;
             placed.add(node.id);
             currentX += 280;
         });
     });
 
-    // Perfectly center the entire graph structure to the middle of the screen
+    // Perfectly center the entire assembled grid to the middle of the screen
     nodes.forEach(n => {
         if (n.x < globalMinX) globalMinX = n.x;
         if (n.x > globalMaxX) globalMaxX = n.x;
     });
 
     const graphWidth = globalMaxX - globalMinX;
-    const shiftAmount = (window.innerWidth / 2) - (graphWidth / 2) - globalMinX;
+    const shiftX = (window.innerWidth / 2) - (graphWidth / 2) - globalMinX;
+    
+    nodes.forEach(n => { n.x += shiftX; });
+}
 
-    nodes.forEach(n => {
-        n.fx += shiftAmount;
-        n.x = n.fx;
-    });
+// 2. ORTHOGONAL LINE GENERATOR
+// Draws professional, right-angled family tree lines instead of curvy web connections
+function drawOrthogonalLink(s, t, type) {
+    if (type === 'spouse') {
+        return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+    } else {
+        const midY = (s.y + t.y) / 2;
+        return `M ${s.x} ${s.y + nodeHeight / 2} L ${s.x} ${midY} L ${t.x} ${midY} L ${t.x} ${t.y - nodeHeight / 2}`;
+    }
 }
 
 export function updateGraphView() {
@@ -153,27 +159,35 @@ export function updateGraphView() {
         document.getElementById('btn-reset-filter').classList.add('hidden');
     }
 
-    // Call the strict layout grid before rendering
+    // Because physics are disabled, D3 won't map object links automatically. We do it manually:
+    displayLinks.forEach(link => {
+        if (typeof link.source !== 'object') link.source = displayNodes.find(n => n.id === link.source) || link.source;
+        if (typeof link.target !== 'object') link.target = displayNodes.find(n => n.id === link.target) || link.target;
+    });
+    displayLinks = displayLinks.filter(l => typeof l.source === 'object' && typeof l.target === 'object');
+
+    // Calculate grid strictly before rendering
     calculateDeterministicGrid(displayNodes, displayLinks);
 
-    const linkSelection = g.selectAll(".link").data(displayLinks, d => {
-        const s = typeof d.source === 'object' ? d.source.id : d.source;
-        const t = typeof d.target === 'object' ? d.target.id : d.target;
-        return s + "-" + t + "-" + (d.type || 'parent');
-    });
-
+    // Render Links
+    const linkSelection = g.selectAll(".link").data(displayLinks, d => d.source.id + "-" + d.target.id + "-" + (d.type || 'parent'));
     const linkEnter = linkSelection.enter().append("path")
         .attr("class", d => `link ${d.type === 'spouse' ? 'link-spouse' : 'link-parent'}`)
         .style("opacity", 0);
 
     const links = linkEnter.merge(linkSelection);
-    links.transition().duration(500).style("opacity", 1);
+    links.transition().duration(750)
+         .style("opacity", 1)
+         .attr("d", d => drawOrthogonalLink(d.source, d.target, d.type));
+    
     linkSelection.exit().remove();
 
+    // Render Nodes
     const nodeSelection = g.selectAll(".node").data(displayNodes, d => d.id);
     const nodeEnter = nodeSelection.enter().append("g")
         .attr("class", "node")
         .style("opacity", 0)
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
         .call(d3.drag()
             .filter(event => !event.target.closest('.node-actions'))
             .on("start", dragstarted)
@@ -193,9 +207,13 @@ export function updateGraphView() {
         .style("opacity", 0).style("pointer-events", "none").style("transition", "opacity 0.2s ease");
 
     const nodes = nodeEnter.merge(nodeSelection);
-    nodes.transition().duration(500).style("opacity", 1);
-    nodes.select(".main-card").html(d => createNodeCard(d));
     
+    // Animate smoothly to static positions
+    nodes.transition().duration(750)
+         .style("opacity", 1)
+         .attr("transform", d => `translate(${d.x}, ${d.y})`);
+
+    nodes.select(".main-card").html(d => createNodeCard(d));
     nodes.select(".node-actions")
         .html(d => createActionBubbles(d))
         .each(function(d) {
@@ -211,22 +229,6 @@ export function updateGraphView() {
         });
 
     nodeSelection.exit().remove();
-
-    simulation.nodes(displayNodes).on("tick", () => {
-        links.attr("d", d => {
-            if (d.type === 'spouse') {
-                return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
-            } else {
-                const sourceY = d.source.y + (nodeHeight / 2);
-                const targetY = d.target.y - (nodeHeight / 2);
-                return `M ${d.source.x} ${sourceY} C ${d.source.x} ${(sourceY + targetY) / 2}, ${d.target.x} ${(sourceY + targetY) / 2}, ${d.target.x} ${targetY}`;
-            }
-        });
-        nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
-    });
-
-    simulation.force("link").links(displayLinks);
-    simulation.alpha(1).restart();
     lucide.createIcons();
 }
 
@@ -240,6 +242,24 @@ function handleNodeClick(event, d) {
     parentNode.raise();
     
     highlightDescendants(d.id);
+}
+
+// 3. OVERRIDE DRAG LOGIC
+// Directly bind movement to mouse coordinates and update lines instantly without physics
+function dragstarted(event, d) {
+    d3.select(event.currentTarget).raise(); 
+    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
+}
+function dragged(event, d) { 
+    d.x = event.x; 
+    d.y = event.y; 
+    d3.select(this).attr("transform", `translate(${d.x}, ${d.y})`);
+    
+    g.selectAll(".link").filter(l => l.source.id === d.id || l.target.id === d.id)
+     .attr("d", l => drawOrthogonalLink(l.source, l.target, l.type));
+}
+function dragended(event, d) {
+    // Drop logic completes cleanly
 }
 
 export function getDescendantIds(nodeId, visited = new Set()) {
@@ -304,21 +324,6 @@ export function resetZoomAction() {
     const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
 
     svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
-}
-
-// 3. OVERRIDE DRAG LOGIC
-// Since we removed physics, we manually unlock constraints while dragging
-function dragstarted(event, d) {
-    d3.select(event.currentTarget).raise(); 
-    d.fx = null; d.fy = null;
-    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
-}
-function dragged(event, d) { 
-    d.fx = event.x; d.fy = event.y; 
-    simulation.alpha(1).restart(); // Force screen to re-render lines during drag
-}
-function dragended(event, d) {
-    d.fx = d.x; d.fy = d.y;
 }
 
 import { openModalForm } from './ui.js';
