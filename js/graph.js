@@ -30,7 +30,7 @@ export function resizeCanvas() {
     }
 }
 
-// 1. RECURSIVE TREE-WIDTH ALGORITHM (Perfect Symmetry & Anti-Collision)
+// 1. COMPACT RECURSIVE TREE-WIDTH ALGORITHM
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
@@ -62,7 +62,7 @@ function calculateDeterministicGrid(nodes, links) {
 
         const unitArray = Array.from(unitNodes);
         
-        // Ensure the blood relative (the one with parents in the tree) is ALWAYS placed first [index 0]
+        // Ensure the blood relative (the one with parents in the tree) is placed first
         unitArray.sort((a, b) => {
             const aIsBlood = links.some(l => (l.type === 'parent' || !l.type) && (l.target.id === a.id || l.target === a.id));
             const bIsBlood = links.some(l => (l.type === 'parent' || !l.type) && (l.target.id === b.id || l.target === b.id));
@@ -77,9 +77,8 @@ function calculateDeterministicGrid(nodes, links) {
             level: 0,
             childrenUnits: [],
             parentUnit: null,
-            width: unitArray.length * 280, 
-            treeWidth: 0,
-            spacing: 0
+            width: unitArray.length * 260, // Compact spacing for spouses
+            treeWidth: 0
         };
 
         unitArray.forEach(un => nodeToUnit.set(un.id, unit));
@@ -92,7 +91,7 @@ function calculateDeterministicGrid(nodes, links) {
             const parentUnit = nodeToUnit.get(l.source.id || l.source);
             const childUnit = nodeToUnit.get(l.target.id || l.target);
             if (parentUnit && childUnit && parentUnit !== childUnit) {
-                if (!childUnit.parentUnit) { // Prevent DAG cycles, keep pure tree
+                if (!childUnit.parentUnit) { // Prevent cycles
                     childUnit.parentUnit = parentUnit;
                     parentUnit.childrenUnits.push(childUnit);
                 }
@@ -110,22 +109,14 @@ function calculateDeterministicGrid(nodes, links) {
     roots.forEach(r => assignLevel(r, 0));
 
     // Step 4: Calculate Sub-Tree Widths (Bottom-Up)
-    // This ensures parents reserve enough space for all descendants, preventing collisions forever.
+    // THE FIX: Instead of applying max spacing, we accumulate exact spacing + a minimum gap.
     function calcTreeWidth(u) {
         if (u.childrenUnits.length === 0) {
             u.treeWidth = u.width;
-            u.spacing = 0;
         } else {
             u.childrenUnits.forEach(c => calcTreeWidth(c));
-            
-            // Sibling spacing is determined by the widest child branch to ensure no crossover
-            const maxChildTreeWidth = Math.max(...u.childrenUnits.map(c => c.treeWidth));
-            u.spacing = maxChildTreeWidth + 80; // 80px buffer between sibling branches
-            
-            const span = (u.childrenUnits.length - 1) * u.spacing;
-            
-            // Allocate symmetrical buffer space to keep the parent perfectly centered
-            const totalChildrenWidth = span + 2 * maxChildTreeWidth; 
+            const minGap = 40; // Minimal buffer between sibling branches
+            const totalChildrenWidth = u.childrenUnits.reduce((sum, c) => sum + c.treeWidth, 0) + (u.childrenUnits.length - 1) * minGap;
             u.treeWidth = Math.max(u.width, totalChildrenWidth);
         }
     }
@@ -135,34 +126,26 @@ function calculateDeterministicGrid(nodes, links) {
     function assignCenterX(u, startX) {
         u.centerX = startX + u.treeWidth / 2;
         
-        let nodeStartX = u.centerX - (u.width / 2);
-        
+        // Symmetrically center spouses around u.centerX
         u.nodes.forEach((n, idx) => {
-            n.fx = nodeStartX + (idx * 260); // 260px spacing holds spouses together
+            n.fx = u.centerX - ((u.nodes.length - 1) * 260) / 2 + (idx * 260);
             n.fy = u.level * 320 + 150;
             n.x = n.fx;
             n.y = n.fy;
         });
         
         if (u.childrenUnits.length > 0) {
-            // Sort children chronologically
             u.childrenUnits.sort((a,b) => (parseInt(a.nodes[0].birth)||9999) - (parseInt(b.nodes[0].birth)||9999));
             
-            const span = (u.childrenUnits.length - 1) * u.spacing;
+            const minGap = 40;
+            const totalChildrenWidth = u.childrenUnits.reduce((sum, c) => sum + c.treeWidth, 0) + (u.childrenUnits.length - 1) * minGap;
             
-            // Calculate the exact pixel where the drop-line starts (Union of spouses)
-            let parentDropX = u.nodes[0].fx;
-            if (u.nodes.length > 1) {
-                parentDropX = (u.nodes[0].fx + u.nodes[1].fx) / 2;
-            }
+            // Start rendering the children exactly aligned beneath the parent's center
+            let currentChildStartX = u.centerX - (totalChildrenWidth / 2);
             
-            // Distribute children so their connection points (blood nodes) are PERFECTLY symmetric
-            u.childrenUnits.forEach((c, i) => {
-                const childBloodX = parentDropX - span / 2 + i * u.spacing;
-                
-                // Align the child's start box so its blood node falls exactly on the target X
-                const childStartX = childBloodX + c.width / 2 - c.treeWidth / 2;
-                assignCenterX(c, childStartX);
+            u.childrenUnits.forEach((c) => {
+                assignCenterX(c, currentChildStartX);
+                currentChildStartX += c.treeWidth + minGap;
             });
         }
     }
@@ -170,7 +153,7 @@ function calculateDeterministicGrid(nodes, links) {
     let currentX = 0;
     roots.forEach(r => {
         assignCenterX(r, currentX);
-        currentX += r.treeWidth + 160; // 160px gap between distinct family trees
+        currentX += r.treeWidth + 120; // Minimal gap between completely distinct family trees
     });
 
     // Step 6: Center the entire assembled graph to the screen viewport
@@ -191,18 +174,17 @@ function calculateDeterministicGrid(nodes, links) {
 }
 
 // 2. ADVANCED SMOOTH CURVE GENERATOR
-// Draws U-shape beneath spouses, and perfectly centered bezier drops for children
 function drawSmoothLink(d, allLinks) {
     const s = d.source;
     const t = d.target;
     const type = d.type;
 
     if (type === 'spouse') {
-        // Create a 'U' shaped curve underneath the spouse cards
-        const startY = s.y + nodeHeight / 2; 
-        const endY = t.y + nodeHeight / 2;
+        // Create a precise 'U' shaped curve underneath the spouse cards
+        const startY = s.y + nodeHeight / 2 - 10; 
+        const endY = t.y + nodeHeight / 2 - 10;
         const midX = (s.x + t.x) / 2;
-        const controlY = startY + 60; // Curve dips downwards beautifully
+        const controlY = startY + 50; // Dip for the connection union
 
         return `M ${s.x} ${startY} Q ${midX} ${controlY} ${t.x} ${endY}`;
     } else {
@@ -210,13 +192,12 @@ function drawSmoothLink(d, allLinks) {
         let startX = s.x;
         let startY = s.y + nodeHeight / 2;
 
-        // Find if parent is part of a marriage to start line from the U-curve union
         const spouseLink = allLinks.find(l => l.type === 'spouse' && (l.source.id === s.id || l.target.id === s.id));
         if (spouseLink) {
             const partner = (spouseLink.source.id === s.id) ? spouseLink.target : spouseLink.source;
             if (Math.abs(partner.y - s.y) < 10) {
                 startX = (s.x + partner.x) / 2; 
-                startY = s.y + nodeHeight / 2 + 30; // Midpoint of the Q curve dip
+                startY = s.y + nodeHeight / 2 + 15; // Meets exactly in the middle of the 'U' union
             }
         }
 
@@ -260,7 +241,6 @@ export function updateGraphView() {
         .style("opacity", 0);
 
     const links = linkEnter.merge(linkSelection);
-    // Notice: Passing displayLinks to find spouse unions dynamically
     links.transition().duration(750)
          .style("opacity", 1)
          .attr("d", d => drawSmoothLink(d, displayLinks));
