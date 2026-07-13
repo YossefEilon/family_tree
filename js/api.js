@@ -27,15 +27,11 @@ export function fetchFamilyDatabase(onSuccess, onError, onNoApi) {
 
 export function initializeNodePositions() {
     globalState.familyData.nodes.forEach((n) => {
-        // Strip out existing coordinates to enforce the strict deterministic blueprint
-        delete n.x;
-        delete n.y;
-        delete n.fx;
-        delete n.fy;
-        delete n.px;
-        delete n.py;
-        delete n.vx;
-        delete n.vy;
+        // Strip out historical dynamic variables to prevent frame conflicts
+        delete n.x; delete n.y;
+        delete n.fx; delete n.fy;
+        delete n.px; delete n.py;
+        delete n.vx; delete n.vy;
 
         if (n.isAlive === undefined) n.isAlive = n.death === "";
     });
@@ -108,8 +104,8 @@ export function getCleanDataString() {
             level: n.level || 0 
         })),
         links: globalState.familyData.links.map(l => ({
-            source: typeof l.source === 'object' ? l.source.id : l.source;
-            target: typeof l.target === 'object' ? l.target.id : l.target;
+            source: typeof l.source === 'object' ? l.source.id : l.source,
+            target: typeof l.target === 'object' ? l.target.id : l.target,
             type: l.type || "parent"
         }))
     };
