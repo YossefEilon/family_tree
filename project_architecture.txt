@@ -1,0 +1,12 @@
+eilon_family_tree/
+│
+├── index.html               # The main skeleton file
+├── css/
+│   └── styles.css           # Custom CSS animations, scrollbars, and D3 canvas overrides
+│
+└── js/
+    ├── config.js            # Configuration variables & hardcoded fallback data
+    ├── api.js               # Cloud sync, data cleaning, and Google Sheet fetch logic
+    ├── graph.js             # D3 Force simulation configuration and graph update loop
+    ├── ui.js                # Modals, toasts, layout template generation (HTML string builders)
+    └── app.js               # Central orchestrator (Initialization and event routing)
