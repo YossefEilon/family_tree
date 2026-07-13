@@ -20,6 +20,7 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
     
+    // Physics entirely disabled to allow pure mathematical tree rendering
     simulation = d3.forceSimulation().alphaDecay(1);
 }
 
@@ -29,13 +30,14 @@ export function resizeCanvas() {
     }
 }
 
-// 1. DETERMINISTIC CAPSULE GRID ALGORITHM
+// 1. RECURSIVE TREE-WIDTH ALGORITHM (Perfect Symmetry & Anti-Collision)
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
     const units = [];
     const nodeToUnit = new Map();
 
+    // Step 1: Package spouses into indivisible Family Units
     nodes.forEach(n => {
         if (nodeToUnit.has(n.id)) return;
         
@@ -59,116 +61,119 @@ function calculateDeterministicGrid(nodes, links) {
         }
 
         const unitArray = Array.from(unitNodes);
-        unitArray.sort((a, b) => (parseInt(a.birth) || 9999) - (parseInt(b.birth) || 9999));
+        
+        // Ensure the blood relative (the one with parents in the tree) is ALWAYS placed first [index 0]
+        unitArray.sort((a, b) => {
+            const aIsBlood = links.some(l => (l.type === 'parent' || !l.type) && (l.target.id === a.id || l.target === a.id));
+            const bIsBlood = links.some(l => (l.type === 'parent' || !l.type) && (l.target.id === b.id || l.target === b.id));
+            if (aIsBlood && !bIsBlood) return -1;
+            if (!aIsBlood && bIsBlood) return 1;
+            return (parseInt(a.birth) || 9999) - (parseInt(b.birth) || 9999);
+        });
         
         const unit = {
             id: unitArray[0].id,
             nodes: unitArray,
             level: 0,
-            parents: new Set(),
-            children: new Set(),
+            childrenUnits: [],
+            parentUnit: null,
             width: unitArray.length * 280, 
-            centerX: 0
+            treeWidth: 0,
+            spacing: 0
         };
 
         unitArray.forEach(un => nodeToUnit.set(un.id, unit));
         units.push(unit);
     });
 
+    // Step 2: Build Strict Parent-Child Unit Relationships
     links.forEach(l => {
         if (l.type === 'parent' || !l.type) {
             const parentUnit = nodeToUnit.get(l.source.id || l.source);
             const childUnit = nodeToUnit.get(l.target.id || l.target);
             if (parentUnit && childUnit && parentUnit !== childUnit) {
-                childUnit.parents.add(parentUnit);
-                parentUnit.children.add(childUnit);
+                if (!childUnit.parentUnit) { // Prevent DAG cycles, keep pure tree
+                    childUnit.parentUnit = parentUnit;
+                    parentUnit.childrenUnits.push(childUnit);
+                }
             }
         }
     });
 
-    let changed = true;
-    let iterations = 0;
-    while(changed && iterations < 100) {
-        changed = false;
-        iterations++;
-        units.forEach(u => {
-            if (u.parents.size > 0) {
-                let maxParentLevel = -1;
-                u.parents.forEach(p => { if (p.level > maxParentLevel) maxParentLevel = p.level; });
-                if (u.level <= maxParentLevel) {
-                    u.level = maxParentLevel + 1;
-                    changed = true;
-                }
-            }
+    const roots = units.filter(u => !u.parentUnit);
+
+    // Step 3: Assign Generation Levels (Top-Down)
+    function assignLevel(u, lvl) {
+        u.level = lvl;
+        u.childrenUnits.forEach(c => assignLevel(c, lvl + 1));
+    }
+    roots.forEach(r => assignLevel(r, 0));
+
+    // Step 4: Calculate Sub-Tree Widths (Bottom-Up)
+    // This ensures parents reserve enough space for all descendants, preventing collisions forever.
+    function calcTreeWidth(u) {
+        if (u.childrenUnits.length === 0) {
+            u.treeWidth = u.width;
+            u.spacing = 0;
+        } else {
+            u.childrenUnits.forEach(c => calcTreeWidth(c));
+            
+            // Sibling spacing is determined by the widest child branch to ensure no crossover
+            const maxChildTreeWidth = Math.max(...u.childrenUnits.map(c => c.treeWidth));
+            u.spacing = maxChildTreeWidth + 80; // 80px buffer between sibling branches
+            
+            const span = (u.childrenUnits.length - 1) * u.spacing;
+            
+            // Allocate symmetrical buffer space to keep the parent perfectly centered
+            const totalChildrenWidth = span + 2 * maxChildTreeWidth; 
+            u.treeWidth = Math.max(u.width, totalChildrenWidth);
+        }
+    }
+    roots.forEach(r => calcTreeWidth(r));
+
+    // Step 5: Assign X Coordinates (Top-Down)
+    function assignCenterX(u, startX) {
+        u.centerX = startX + u.treeWidth / 2;
+        
+        let nodeStartX = u.centerX - (u.width / 2);
+        
+        u.nodes.forEach((n, idx) => {
+            n.fx = nodeStartX + (idx * 260); // 260px spacing holds spouses together
+            n.fy = u.level * 320 + 150;
+            n.x = n.fx;
+            n.y = n.fy;
         });
+        
+        if (u.childrenUnits.length > 0) {
+            // Sort children chronologically
+            u.childrenUnits.sort((a,b) => (parseInt(a.nodes[0].birth)||9999) - (parseInt(b.nodes[0].birth)||9999));
+            
+            const span = (u.childrenUnits.length - 1) * u.spacing;
+            
+            // Calculate the exact pixel where the drop-line starts (Union of spouses)
+            let parentDropX = u.nodes[0].fx;
+            if (u.nodes.length > 1) {
+                parentDropX = (u.nodes[0].fx + u.nodes[1].fx) / 2;
+            }
+            
+            // Distribute children so their connection points (blood nodes) are PERFECTLY symmetric
+            u.childrenUnits.forEach((c, i) => {
+                const childBloodX = parentDropX - span / 2 + i * u.spacing;
+                
+                // Align the child's start box so its blood node falls exactly on the target X
+                const childStartX = childBloodX + c.width / 2 - c.treeWidth / 2;
+                assignCenterX(c, childStartX);
+            });
+        }
     }
 
-    const levelsObj = {};
-    units.forEach(u => {
-        if (!levelsObj[u.level]) levelsObj[u.level] = [];
-        levelsObj[u.level].push(u);
+    let currentX = 0;
+    roots.forEach(r => {
+        assignCenterX(r, currentX);
+        currentX += r.treeWidth + 160; // 160px gap between distinct family trees
     });
 
-    const nextAvailableX = {};
-
-    Object.keys(levelsObj).sort((a, b) => a - b).forEach(lvl => {
-        const rowUnits = levelsObj[lvl];
-        const currentY = lvl * 320 + 150; 
-        if (nextAvailableX[lvl] === undefined) nextAvailableX[lvl] = 0;
-
-        rowUnits.forEach(u => {
-            if (u.parents.size > 0) {
-                let sumX = 0;
-                u.parents.forEach(p => sumX += p.centerX);
-                u.targetX = sumX / u.parents.size; 
-            } else {
-                u.targetX = -1; 
-            }
-        });
-
-        const clusters = new Map();
-        rowUnits.forEach(u => {
-            const key = u.targetX;
-            if (!clusters.has(key)) clusters.set(key, []);
-            clusters.get(key).push(u);
-        });
-
-        Array.from(clusters.keys()).sort((a, b) => a - b).forEach(key => {
-            const cluster = clusters.get(key);
-            
-            cluster.sort((a, b) => {
-                const birthA = parseInt(a.nodes[0].birth) || 9999;
-                const birthB = parseInt(b.nodes[0].birth) || 9999;
-                return birthA - birthB;
-            });
-            
-            const gap = 80; 
-            const clusterWidth = cluster.reduce((sum, u) => sum + u.width, 0) + (cluster.length - 1) * gap;
-            
-            let startX = nextAvailableX[lvl];
-            
-            if (key !== -1) { 
-                const idealStartX = key - (clusterWidth / 2);
-                startX = Math.max(nextAvailableX[lvl], idealStartX);
-            }
-
-            cluster.forEach(u => {
-                u.centerX = startX + (u.width / 2);
-                
-                u.nodes.forEach((n, idx) => {
-                    n.fx = startX + (idx * 280);
-                    n.fy = currentY;
-                    n.x = n.fx;
-                    n.y = n.fy;
-                });
-                
-                startX += u.width + gap;
-            });
-            
-            nextAvailableX[lvl] = startX + 180; 
-        });
-    });
-
+    // Step 6: Center the entire assembled graph to the screen viewport
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
     nodes.forEach(n => {
@@ -185,7 +190,8 @@ function calculateDeterministicGrid(nodes, links) {
     });
 }
 
-// 2. ADVANCED SMOOTH CURVE GENERATOR (U-SHAPE UNION FOR SPOUSES)
+// 2. ADVANCED SMOOTH CURVE GENERATOR
+// Draws U-shape beneath spouses, and perfectly centered bezier drops for children
 function drawSmoothLink(d, allLinks) {
     const s = d.source;
     const t = d.target;
@@ -193,37 +199,28 @@ function drawSmoothLink(d, allLinks) {
 
     if (type === 'spouse') {
         // Create a 'U' shaped curve underneath the spouse cards
-        const startY = s.y + nodeHeight / 2; // Bottom of node
+        const startY = s.y + nodeHeight / 2; 
         const endY = t.y + nodeHeight / 2;
         const midX = (s.x + t.x) / 2;
-        const controlY = startY + 60; // Curve dips 60px downwards
+        const controlY = startY + 60; // Curve dips downwards beautifully
 
-        // Quadratic Bezier Curve
         return `M ${s.x} ${startY} Q ${midX} ${controlY} ${t.x} ${endY}`;
     } else {
-        // Child connection - Defaults to dropping from the parent's center
+        // Child connection
         let startX = s.x;
         let startY = s.y + nodeHeight / 2;
 
-        // Search if this parent is part of a marriage (spouse link exists)
-        const spouseLink = allLinks.find(l => 
-            l.type === 'spouse' && 
-            (l.source.id === s.id || l.target.id === s.id)
-        );
-
+        // Find if parent is part of a marriage to start line from the U-curve union
+        const spouseLink = allLinks.find(l => l.type === 'spouse' && (l.source.id === s.id || l.target.id === s.id));
         if (spouseLink) {
             const partner = (spouseLink.source.id === s.id) ? spouseLink.target : spouseLink.source;
-            
-            // If the partner is horizontally aligned with the parent, calculate the union point
             if (Math.abs(partner.y - s.y) < 10) {
                 startX = (s.x + partner.x) / 2; 
-                // Math logic: Midpoint of a Q curve dropping 60px is exactly 30px down.
-                startY = s.y + nodeHeight / 2 + 30; 
+                startY = s.y + nodeHeight / 2 + 30; // Midpoint of the Q curve dip
             }
         }
 
         const endY = t.y - nodeHeight / 2;
-        // Smooth Cubic Bezier connecting the union point to the child
         return `M ${startX} ${startY} C ${startX} ${(startY + endY) / 2}, ${t.x} ${(startY + endY) / 2}, ${t.x} ${endY}`;
     }
 }
@@ -254,6 +251,7 @@ export function updateGraphView() {
     });
     displayLinks = displayLinks.filter(l => typeof l.source === 'object' && typeof l.target === 'object');
 
+    // Run geometric tree calculations BEFORE rendering lines
     calculateDeterministicGrid(displayNodes, displayLinks);
 
     const linkSelection = g.selectAll(".link").data(displayLinks, d => d.source.id + "-" + d.target.id + "-" + (d.type || 'parent'));
@@ -262,7 +260,7 @@ export function updateGraphView() {
         .style("opacity", 0);
 
     const links = linkEnter.merge(linkSelection);
-    // Notice we pass displayLinks into the function to dynamically find the spouse lines
+    // Notice: Passing displayLinks to find spouse unions dynamically
     links.transition().duration(750)
          .style("opacity", 1)
          .attr("d", d => drawSmoothLink(d, displayLinks));
