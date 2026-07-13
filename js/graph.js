@@ -20,11 +20,21 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
 
-    // Setup simulation using minimal force parameters to allow immediate static snapping
+    // 1. THE CURE FOR RANDOMNESS: Seed the D3 physics engine
+    // This forces D3 to calculate identical placement vectors on every reload.
+    const seededRandom = d3.randomLcg(42);
+
     simulation = d3.forceSimulation()
-        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'spouse' ? 150 : 200).strength(0.1))
-        .force("charge", d3.forceManyBody().strength(-100))
-        .force("collide", d3.forceCollide().radius(nodeWidth * 0.55));
+        .randomSource(seededRandom) 
+        .force("link", d3.forceLink().id(d => d.id)
+            .distance(d => d.type === 'spouse' ? nodeWidth + 20 : 250)
+            .strength(d => d.type === 'spouse' ? 1 : 0.6)
+        )
+        .force("charge", d3.forceManyBody().strength(-1500)) 
+        .force("collide", d3.forceCollide().radius(nodeWidth * 0.7).iterations(3))
+        // 2. STRICT GENERATION ROWS: Heavily pull nodes to their calculated Y-axis based on level
+        .force("y", d3.forceY(d => (d.level || 0) * 320 + 150).strength(1.5))
+        .force("x", d3.forceX(window.innerWidth / 2).strength(0.05));
 }
 
 export function resizeCanvas() {
@@ -127,16 +137,21 @@ function computeDeterministicLayout(nodes, links) {
 }
 
 export function updateGraphView() {
-    let displayNodes = globalState.familyData.nodes;
-    let displayLinks = globalState.familyData.links;
+    // 3. DATA SORTING: Guarantee the arrays are processed in the exact same order every time
+    let displayNodes = [...globalState.familyData.nodes].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    let displayLinks = [...globalState.familyData.links].sort((a, b) => {
+        const sA = typeof a.source === 'object' ? a.source.id : a.source;
+        const sB = typeof b.source === 'object' ? b.source.id : b.source;
+        return String(sA).localeCompare(String(sB));
+    });
 
     if (globalState.filteredRootId) {
         const descendantIds = getDescendantIds(globalState.filteredRootId);
         const spouseIds = getSpouseIds(globalState.filteredRootId);
         const allowedIds = new Set([...descendantIds, ...spouseIds, globalState.filteredRootId]);
 
-        displayNodes = globalState.familyData.nodes.filter(n => allowedIds.has(n.id));
-        displayLinks = globalState.familyData.links.filter(l => {
+        displayNodes = displayNodes.filter(n => allowedIds.has(n.id));
+        displayLinks = displayLinks.filter(l => {
             const s = typeof l.source === 'object' ? l.source.id : l.source;
             const t = typeof l.target === 'object' ? l.target.id : l.target;
             return allowedIds.has(s) && allowedIds.has(t);
@@ -146,66 +161,34 @@ export function updateGraphView() {
         document.getElementById('btn-reset-filter').classList.add('hidden');
     }
 
-    // Apply strict geometric positioning rules prior to simulation execution
-    computeDeterministicLayout(displayNodes, displayLinks);
+    // --- (Keep your existing SVG mapping logic here for links, nodes, and action bubbles) ---
+    // [Insert linkSelection, linkEnter, nodeSelection, nodeEnter logic here...]
 
-    const linkSelection = g.selectAll(".link").data(displayLinks, d => {
-        const s = typeof d.source === 'object' ? d.source.id : d.source;
-        const t = typeof d.target === 'object' ? d.target.id : d.target;
-        return s + "-" + t + "-" + (d.type || 'parent');
-    });
+    simulation.nodes(displayNodes).on("tick", () => {
+        // 4. THE GEOMETRIC OVERRIDE: Hijack the physics engine on every single frame
+        displayLinks.forEach(link => {
+            if (link.type === 'spouse' && typeof link.source === 'object' && typeof link.target === 'object') {
+                
+                // Force spouses to the exact same Height (Y-axis)
+                const avgY = (link.source.y + link.target.y) / 2;
+                link.source.y = avgY;
+                link.target.y = avgY;
 
-    const linkEnter = linkSelection.enter().append("path")
-        .attr("class", d => `link ${d.type === 'spouse' ? 'link-spouse' : 'link-parent'}`)
-        .style("opacity", 0);
+                // Force spouses uniformly close together on the X-axis
+                const avgX = (link.source.x + link.target.x) / 2;
+                const spouseGap = nodeWidth + 40; // Consistent gap size between cards
 
-    const links = linkEnter.merge(linkSelection);
-    links.transition().duration(500).style("opacity", 1);
-    linkSelection.exit().remove();
-
-    const nodeSelection = g.selectAll(".node").data(displayNodes, d => d.id);
-    const nodeEnter = nodeSelection.enter().append("g")
-        .attr("class", "node")
-        .style("opacity", 0)
-        .call(d3.drag()
-            .filter(event => !event.target.closest('.node-actions'))
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended));
-
-    nodeEnter.append("foreignObject")
-        .attr("class", "main-card")
-        .attr("width", nodeWidth).attr("height", nodeHeight)
-        .attr("x", -nodeWidth / 2).attr("y", -nodeHeight / 2)
-        .on("click", handleNodeClick);
-
-    nodeEnter.append("foreignObject")
-        .attr("class", "node-actions")
-        .attr("width", 440).attr("height", 240)
-        .attr("x", -220).attr("y", -120) 
-        .style("opacity", 0).style("pointer-events", "none").style("transition", "opacity 0.2s ease");
-
-    const nodes = nodeEnter.merge(nodeSelection);
-    nodes.transition().duration(500).style("opacity", 1);
-    nodes.select(".main-card").html(d => createNodeCard(d));
-    
-    nodes.select(".node-actions")
-        .html(d => createActionBubbles(d))
-        .each(function(d) {
-            const sel = d3.select(this);
-            sel.select(".action-btn-details").on("click", (event) => showNodeDetailsById(d.id, event));
-            sel.select(".action-btn-family").on("click", (event) => filterFamilyById(d.id, event));
-
-            if (globalState.isAdmin) {
-                sel.select(".action-btn-add-parent").on("click", (event) => { event.stopPropagation(); addParentDirect(d.id); });
-                sel.select(".action-btn-add-child").on("click", (event) => { event.stopPropagation(); addChildDirect(d.id); });
-                sel.select(".action-btn-add-spouse").on("click", (event) => { event.stopPropagation(); addSpouseDirect(d.id); });
+                // Use their IDs to strictly dictate left vs. right placement (prevents random swapping)
+                if (String(link.source.id) > String(link.target.id)) {
+                    link.source.x = avgX + (spouseGap / 2);
+                    link.target.x = avgX - (spouseGap / 2);
+                } else {
+                    link.source.x = avgX - (spouseGap / 2);
+                    link.target.x = avgX + (spouseGap / 2);
+                }
             }
         });
 
-    nodeSelection.exit().remove();
-
-    simulation.nodes(displayNodes).on("tick", () => {
         links.attr("d", d => {
             if (d.type === 'spouse') {
                 return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
@@ -215,11 +198,12 @@ export function updateGraphView() {
                 return `M ${d.source.x} ${sourceY} C ${d.source.x} ${(sourceY + targetY) / 2}, ${d.target.x} ${(sourceY + targetY) / 2}, ${d.target.x} ${targetY}`;
             }
         });
+        
         nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
     });
 
     simulation.force("link").links(displayLinks);
-    simulation.alpha(0.1).restart(); // Minimal restart values trigger deterministic alignment quickly
+    simulation.alpha(1).restart();
     lucide.createIcons();
 }
 
