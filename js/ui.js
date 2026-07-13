@@ -24,6 +24,50 @@ export function createNodeCard(data) {
         colorClasses = colorClasses.replace(/border-[a-z]+-200/, "border-indigo-400") + " ring-2 ring-indigo-400 shadow-md shadow-indigo-100";
     }
 
+    // --- Calculate Age ---
+    let ageHtml = '';
+    if (data.birth) {
+        const birthMatch = String(data.birth).match(/\d{4}/);
+        const birthYear = birthMatch ? parseInt(birthMatch[0]) : null;
+
+        if (birthYear) {
+            let age = null;
+            if (data.isAlive === false || data.isAlive === "false" || (data.death && data.death.trim() !== "")) {
+                const deathMatch = data.death ? String(data.death).match(/\d{4}/) : null;
+                const deathYear = deathMatch ? parseInt(deathMatch[0]) : null;
+                if (deathYear) age = deathYear - birthYear;
+            } else {
+                age = new Date().getFullYear() - birthYear;
+            }
+
+            if (age !== null && !isNaN(age) && age >= 0) {
+                ageHtml = `
+                    <div class="flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded shadow-sm w-max" title="גיל">
+                        <i data-lucide="hourglass" class="w-3 h-3 pointer-events-none"></i>
+                        <span>${age}</span>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // --- Calculate Descendants ---
+    let descHtml = '';
+    const descCount = getDescendantIds(data.id).size - 1;
+    if (descCount > 0) {
+        descHtml = `
+            <div class="flex items-center gap-1 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm w-max" title="צאצאים">
+                <i data-lucide="users" class="w-3 h-3 pointer-events-none"></i>
+                <span>${descCount}</span>
+            </div>
+        `;
+    }
+
+    let badgesHtml = '';
+    if (ageHtml || descHtml) {
+        badgesHtml = `<div class="flex flex-wrap gap-1 mt-1">${ageHtml}${descHtml}</div>`;
+    }
+
     let dateHtml = data.isAlive 
         ? `<div class="truncate">${data.birth ? `${bornText}: ${data.birth}` : 'שנת לידה לא ידועה'}</div>` + (data.hebrewBirthDate ? (isBirthdayMonth ? `<div class="text-indigo-600 font-bold bg-indigo-50 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-0.5 text-[10px] w-max"><i data-lucide="cake" class="w-3 h-3"></i> ${celebrateText} ב${currentHebMonth}!</div>` : `<div class="text-slate-400 text-[10px] mt-0.5 truncate">${data.hebrewBirthDate}</div>`) : '')
         : `<div class="truncate text-slate-600 font-semibold mt-0.5">${data.birth || '?'} - ${data.death || '?'}</div>` + (data.hebrewDeathDate ? `<div class="text-slate-400 text-[10px] mt-0.5 truncate">פטירה: ${data.hebrewDeathDate}</div>` : '');
@@ -37,10 +81,11 @@ export function createNodeCard(data) {
             <div class="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-2 ml-3 ${iconColor} overflow-hidden border border-slate-100 pointer-events-none">
                 ${picHtml}
             </div>
-            <div class="flex-1 overflow-hidden pl-7 pointer-events-none">
+            <div class="flex-1 overflow-hidden pl-7 pointer-events-none flex flex-col justify-center">
                 <div class="font-bold text-sm truncate">${data.name || 'ללא שם'}</div>
-                <div class="text-[11px] opacity-80 truncate mb-1">${data.role || 'ישות'}</div>
+                <div class="text-[11px] opacity-80 truncate mb-0">${data.role || 'ישות'}</div>
                 <div class="text-xs text-slate-500 leading-snug flex flex-col justify-center">${dateHtml}</div>
+                ${badgesHtml}
             </div>
             <button class="absolute top-2.5 left-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white/80 rounded-full p-1 transition-colors z-20" title="הצג פרטים מלאים">
                 <i data-lucide="info" class="w-[18px] h-[18px] pointer-events-none"></i>
@@ -118,9 +163,30 @@ export function showNodeDetailsById(id, event) {
     globalState.currentNode = data;
 
     document.getElementById('view-name').innerText = data.name || 'ללא שם';
+    
+    // Calculate Age for the detailed modal
+    let modalAgeHtml = '';
+    if (data.birth) {
+        const birthMatch = String(data.birth).match(/\d{4}/);
+        const birthYear = birthMatch ? parseInt(birthMatch[0]) : null;
+        if (birthYear) {
+            let age = null;
+            if (data.isAlive === false || data.isAlive === "false" || (data.death && data.death.trim() !== "")) {
+                const deathMatch = data.death ? String(data.death).match(/\d{4}/) : null;
+                const deathYear = deathMatch ? parseInt(deathMatch[0]) : null;
+                if (deathYear) age = deathYear - birthYear;
+            } else {
+                age = new Date().getFullYear() - birthYear;
+            }
+            if (age !== null && !isNaN(age) && age >= 0) {
+                modalAgeHtml = ` <span class="mx-2 text-slate-300">|</span> <span class="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full text-xs inline-flex items-center gap-1"><i data-lucide="hourglass" class="w-3 h-3"></i> גיל: ${age}</span>`;
+            }
+        }
+    }
+
     document.getElementById('view-dates').innerHTML = data.isAlive 
-        ? `${data.gender === 'female' ? 'נולדה' : 'נולד'}: ${data.birth || '?'}`
-        : `<span class="text-slate-500 text-sm">נולד/ה:</span> ${data.birth || '?'} <span class="mx-2 text-slate-300">|</span> <span class="text-slate-500 text-sm">פטירה:</span> ${data.death || '?'}`;
+        ? `${data.gender === 'female' ? 'נולדה' : 'נולד'}: ${data.birth || '?'}${modalAgeHtml}`
+        : `<span class="text-slate-500 text-sm">נולד/ה:</span> ${data.birth || '?'} <span class="mx-2 text-slate-300">|</span> <span class="text-slate-500 text-sm">פטירה:</span> ${data.death || '?'}${modalAgeHtml}`;
     
     if (data.previousLastName) {
         document.getElementById('view-prev-name').innerText = data.previousLastName;
@@ -146,9 +212,10 @@ export function showNodeDetailsById(id, event) {
         hebrewDateEl.classList.add('hidden');
     }
 
+    // Fixed typo: "צาצאים" -> "צאצאים"
     const descCount = getDescendantIds(data.id).size - 1;
     if (descCount > 0) {
-        document.getElementById('view-descendants-text').innerText = `${descCount} צาצאים`;
+        document.getElementById('view-descendants-text').innerText = `${descCount} צאצאים`;
         document.getElementById('view-descendants').classList.remove('hidden');
     } else {
         document.getElementById('view-descendants').classList.add('hidden');
