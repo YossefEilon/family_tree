@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap');
+
+body { font-family: 'Heebo', sans-serif; background-color: #f8fafc; overflow: hidden; margin: 0; padding: 0; }
+svg { width: 100vw; height: 100vh; cursor: grab; display: block; }
+svg:active { cursor: grabbing; }
+
+.link { fill: none; stroke: #cbd5e1; stroke-width: 2px; transition: all 0.3s ease; }
+.link:hover { stroke: #94a3b8; stroke-width: 3px; }
+.link-spouse { stroke: #f472b6; stroke-dasharray: 6,4; }
+.link-parent { stroke: #cbd5e1; }
+
+/* Highlight classes */
+.link-dimmed { opacity: 0.15 !important; }
+.link-highlight { stroke: #6366f1 !important; stroke-width: 4px !important; opacity: 1 !important; z-index: 10; }
+.node-dimmed { opacity: 0.4 !important; transition: opacity 0.3s; }
+
+.node-card { transition: all 0.2s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); cursor: pointer; }
+.node-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-color: #6366f1; }
+.node-card:active { cursor: grabbing; }
+
+/* Modal Styles */
+.modal-enter { opacity: 0; transform: scale(0.95) translateY(10px); transition: all 0.3s ease; }
+.modal-enter-active { opacity: 1; transform: scale(1) translateY(0); }
+.backdrop-enter { opacity: 0; transition: opacity 0.3s ease; }
+.backdrop-enter-active { opacity: 1; }
+
+/* Custom Scrollbar for Textareas */
+textarea::-webkit-scrollbar { width: 8px; }
+textarea::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+textarea::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+textarea::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
