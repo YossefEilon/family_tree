@@ -27,10 +27,16 @@ export function fetchFamilyDatabase(onSuccess, onError, onNoApi) {
 
 export function initializeNodePositions() {
     globalState.familyData.nodes.forEach((n) => {
-        if (n.x === undefined || isNaN(n.x)) {
-            n.x = (window.innerWidth / 2) + (Math.random() - 0.5) * 100;
-            n.y = ((n.level || 0) * 220) + 150 + (Math.random() - 0.5) * 50;
-        }
+        // Strip out existing coordinates to enforce the strict deterministic blueprint
+        delete n.x;
+        delete n.y;
+        delete n.fx;
+        delete n.fy;
+        delete n.px;
+        delete n.py;
+        delete n.vx;
+        delete n.vy;
+
         if (n.isAlive === undefined) n.isAlive = n.death === "";
     });
 }
@@ -51,7 +57,7 @@ export function saveToCloud() {
     const saveBtn = document.getElementById('btn-cloud-save');
     const originalHTML = saveBtn.innerHTML;
 
-    saveBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-white inline-block pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25 pointer-events-none" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75 pointer-events-none" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> שומר...`;
+    saveBtn.innerHTML = `<svg class="animate-spin h-4 w-4 text-white inline-block pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25 pointer-events-none" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75 pointer-events-none" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...`;
     saveBtn.classList.add('pointer-events-none', 'opacity-80');
 
     fetch(API_URL, {
@@ -62,12 +68,12 @@ export function saveToCloud() {
     })
     .then(() => {
         setTimeout(() => {
-            saveBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4 pointer-events-none"></i> נשמר בהצלחה!`;
+            saveBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4 pointer-events-none"></i> Saved!`;
             saveBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
             saveBtn.classList.add('bg-emerald-500');
             lucide.createIcons();
             
-            showToast("השינויים נשמרו בהצלחה בגוגל שיטס!");
+            showToast("Changes synced successfully to Google Sheets!");
             
             setTimeout(() => {
                 saveBtn.innerHTML = originalHTML;
@@ -79,10 +85,10 @@ export function saveToCloud() {
     })
     .catch(error => {
         console.error("Save failed:", error);
-        saveBtn.innerHTML = `שגיאה בשמירה`;
+        saveBtn.innerHTML = `Error Saving`;
         saveBtn.classList.remove('bg-emerald-600');
         saveBtn.classList.add('bg-rose-600');
-        showToast("נכשלה השמירה לגוגל שיטס.", "error");
+        showToast("Failed to save data to cloud.", "error");
         setTimeout(() => {
             saveBtn.innerHTML = originalHTML;
             saveBtn.classList.remove('bg-rose-600', 'pointer-events-none', 'opacity-80');
@@ -102,8 +108,8 @@ export function getCleanDataString() {
             level: n.level || 0 
         })),
         links: globalState.familyData.links.map(l => ({
-            source: typeof l.source === 'object' ? l.source.id : l.source,
-            target: typeof l.target === 'object' ? l.target.id : l.target,
+            source: typeof l.source === 'object' ? l.source.id : l.source;
+            target: typeof l.target === 'object' ? l.target.id : l.target;
             type: l.type || "parent"
         }))
     };
