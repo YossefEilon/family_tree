@@ -1,7 +1,7 @@
 import { globalState, nodeWidth, nodeHeight } from './config.js';
-import { createNodeCard, createActionBubbles, showNodeDetailsById, filterFamilyById } from './ui.js';
+import { createNodeCard, createActionBubbles, showNodeDetailsById, filterFamilyById, openModalForm } from './ui.js';
 
-export let svg, g, zoom;
+export let svg, g, zoom, simulation;
 
 export function initD3Graph() {
     svg = d3.select("#tree-canvas");
@@ -20,8 +20,8 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
     
-    // PHYSICS ENGINE COMPLETELY REMOVED. 
-    // We now use a strict mathematical static rendering grid.
+    // Physics disabled. We use the simulation object solely to trigger re-renders on drag.
+    simulation = d3.forceSimulation().alphaDecay(1);
 }
 
 export function resizeCanvas() {
@@ -30,23 +30,110 @@ export function resizeCanvas() {
     }
 }
 
-// 1. THE RIGID MATH GRID
-// Calculates immutable X and Y coordinates for every node, ignoring all physics.
+// 1. THE RIGID MATH GRID (NOW POWERED BY BIRTH YEARS)
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    // --- NEW: DYNAMIC LEVEL COMPUTATION FROM BIRTH DATES ---
+    // Ignore the old static 'level'. Calculate hierarchy dynamically.
     
-    // Unconditional sorting guarantees the tree never swaps left/right on reload
-    nodes.sort((a, b) => {
-        const birthA = parseInt(a.birth) || 9999;
-        const birthB = parseInt(b.birth) || 9999;
-        return birthA !== birthB ? birthA - birthB : String(a.id).localeCompare(String(b.id));
+    // Step 1: Parse existing birth years
+    nodes.forEach(n => {
+        if (n.birth) {
+            const match = String(n.birth).match(/\d{4}/);
+            n.computedBirth = match ? parseInt(match[0]) : null;
+        } else {
+            n.computedBirth = null;
+        }
     });
 
+    // Step 2: Infer missing birth years automatically (Iterative propagation)
+    for (let i = 0; i < 5; i++) {
+        nodes.forEach(n => {
+            if (n.computedBirth !== null) return;
+            
+            // Try from spouse (same age)
+            const spouseLink = links.find(l => l.type === 'spouse' && ((l.source.id || l.source) === n.id || (l.target.id || l.target) === n.id));
+            if (spouseLink) {
+                const partnerId = (spouseLink.source.id || spouseLink.source) === n.id ? (spouseLink.target.id || spouseLink.target) : (spouseLink.source.id || spouseLink.source);
+                const partner = nodes.find(p => p.id === partnerId);
+                if (partner && partner.computedBirth !== null) { n.computedBirth = partner.computedBirth; return; }
+            }
+            // Try from parents (assume parent is 25 years older)
+            const parentLink = links.find(l => (l.type === 'parent' || !l.type) && (l.target.id || l.target) === n.id);
+            if (parentLink) {
+                const parentId = parentLink.source.id || parentLink.source;
+                const parent = nodes.find(p => p.id === parentId);
+                if (parent && parent.computedBirth !== null) { n.computedBirth = parent.computedBirth + 25; return; }
+            }
+            // Try from children (assume child is 25 years younger)
+            const childLink = links.find(l => (l.type === 'parent' || !l.type) && (l.source.id || l.source) === n.id);
+            if (childLink) {
+                const childId = childLink.target.id || childLink.target;
+                const child = nodes.find(p => p.id === childId);
+                if (child && child.computedBirth !== null) { n.computedBirth = child.computedBirth - 25; return; }
+            }
+        });
+    }
+
+    // Step 3: Fallback for completely isolated nodes
+    const knownBirths = nodes.map(n => n.computedBirth).filter(b => b !== null);
+    const avgBirth = knownBirths.length > 0 ? Math.round(knownBirths.reduce((a,b)=>a+b,0)/knownBirths.length) : 1950;
+    nodes.forEach(n => { if (n.computedBirth === null) n.computedBirth = avgBirth; });
+
+    // Step 4: Force spouses to the exact same computed age for perfect horizontal alignment
+    links.forEach(l => {
+        if (l.type === 'spouse') {
+            const s = nodes.find(n => n.id === (l.source.id || l.source));
+            const t = nodes.find(n => n.id === (l.target.id || l.target));
+            if (s && t) {
+                const avg = Math.round((s.computedBirth + t.computedBirth) / 2);
+                s.computedBirth = avg;
+                t.computedBirth = avg;
+            }
+        }
+    });
+
+    // Step 5: Calculate Dynamic Level (Group into 25-year rows)
+    const minBirth = Math.min(...nodes.map(n => n.computedBirth));
+    nodes.forEach(n => {
+        n.dynamicLevel = Math.max(0, Math.round((n.computedBirth - minBirth) / 25));
+    });
+
+    // Step 6: Strict Hierarchy Override (Parents MUST visually be above children)
+    for (let i = 0; i < 4; i++) {
+        links.forEach(l => {
+            if (l.type === 'parent' || !l.type) {
+                const parent = nodes.find(n => n.id === (l.source.id || l.source));
+                const child = nodes.find(n => n.id === (l.target.id || l.target));
+                // If a child ended up on the same row or above the parent, force them down
+                if (parent && child && child.dynamicLevel <= parent.dynamicLevel) {
+                    child.dynamicLevel = parent.dynamicLevel + 1;
+                    
+                    // Sync the child's spouse to pull them down as well
+                    const childSpouseLink = links.find(sl => sl.type === 'spouse' && ((sl.source.id || sl.source) === child.id || (sl.target.id || sl.target) === child.id));
+                    if (childSpouseLink) {
+                        const spouseId = (childSpouseLink.source.id || childSpouseLink.source) === child.id ? (childSpouseLink.target.id || childSpouseLink.target) : (childSpouseLink.source.id || childSpouseLink.source);
+                        const spouse = nodes.find(n => n.id === spouseId);
+                        if (spouse) spouse.dynamicLevel = child.dynamicLevel;
+                    }
+                }
+            }
+        });
+    }
+    // --- END NEW BIRTH COMPUTATION ---
+
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    
+    // Sort chronologically by the new computed birth dates
+    nodes.sort((a, b) => {
+        return a.computedBirth !== b.computedBirth ? a.computedBirth - b.computedBirth : String(a.id).localeCompare(String(b.id));
+    });
+
+    // Group by our new dynamically generated levels
     const levels = {};
     nodes.forEach(n => {
-        const l = parseInt(n.level || 0);
+        const l = parseInt(n.dynamicLevel || 0);
         if (!levels[l]) levels[l] = [];
         levels[l].push(n);
     });
@@ -55,7 +142,7 @@ function calculateDeterministicGrid(nodes, links) {
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
 
-    // Traverse row by row
+    // Traverse the family tree row by row
     Object.keys(levels).sort((a, b) => a - b).forEach(lvl => {
         const currentY = lvl * 280 + 150;
         let currentX = 0;
@@ -63,60 +150,58 @@ function calculateDeterministicGrid(nodes, links) {
         levels[lvl].forEach(node => {
             if (placed.has(node.id)) return;
 
-            // Search for spouse connections
-            const spouseLink = links.find(l => l.type === 'spouse' && (
+            const spouseLinks = links.filter(l => l.type === 'spouse' && (
                 (l.source.id || l.source) === node.id || (l.target.id || l.target) === node.id
             ));
 
-            if (spouseLink) {
-                const sId = spouseLink.source.id || spouseLink.source;
-                const tId = spouseLink.target.id || spouseLink.target;
-                const partnerId = sId === node.id ? tId : sId;
+            let familyGroup = [node];
+
+            spouseLinks.forEach(link => {
+                const partnerId = (link.source.id || link.source) === node.id ? (link.target.id || link.target) : (link.source.id || link.source);
                 const partner = nodeMap.get(partnerId);
-
-                // Lock spouses symmetrically side-by-side
-                if (partner && partner.level == node.level && !placed.has(partner.id)) {
-                    node.x = currentX; node.y = currentY;
-                    partner.x = currentX + 260; partner.y = currentY;
-
-                    placed.add(node.id);
-                    placed.add(partner.id);
-
-                    // Map all children belonging to this specific couple
-                    const sharedChildren = nodes.filter(n => links.some(l => 
-                        (l.type === 'parent' || !l.type) && 
-                        ((l.source.id || l.source) === node.id || (l.source.id || l.source) === partner.id) && 
-                        (l.target.id || l.target) === n.id
-                    ));
-
-                    // Center children perfectly underneath the midpoint of the parents
-                    if (sharedChildren.length > 0) {
-                        const midX = (node.x + partner.x) / 2;
-                        let childX = midX - ((sharedChildren.length - 1) * 280) / 2;
-                        const childY = (parseInt(lvl) + 1) * 280 + 150;
-
-                        sharedChildren.sort((a,b) => String(a.id).localeCompare(String(b.id))).forEach((child, i) => {
-                            if (!placed.has(child.id)) {
-                                child.x = childX + (i * 280);
-                                child.y = childY;
-                                child.level = parseInt(lvl) + 1; // Force strict level hierarchy
-                                placed.add(child.id);
-                            }
-                        });
-                    }
-                    currentX += 560; // Offset spacing for next couple
-                    return;
+                if (partner && !placed.has(partner.id)) {
+                    familyGroup.push(partner);
                 }
-            }
+            });
 
-            // Lock single unmarried nodes
-            node.x = currentX; node.y = currentY;
-            placed.add(node.id);
-            currentX += 280;
+            // Lock the family unit horizontally
+            familyGroup.forEach((member, index) => {
+                member.fx = currentX + (index * 260); 
+                member.fy = currentY;
+                member.x = member.fx;
+                member.y = member.fy;
+                placed.add(member.id);
+            });
+
+            const groupIds = familyGroup.map(g => g.id);
+            const sharedChildren = nodes.filter(n => links.some(l => 
+                (l.type === 'parent' || !l.type) && 
+                (groupIds.includes(l.source.id || l.source)) && 
+                (l.target.id || l.target) === n.id
+            ));
+
+            // Center children perfectly underneath
+            if (sharedChildren.length > 0) {
+                const midX = (familyGroup[0].fx + familyGroup[familyGroup.length - 1].fx) / 2;
+                let childX = midX - ((sharedChildren.length - 1) * 280) / 2;
+                const childY = (parseInt(lvl) + 1) * 280 + 150;
+
+                sharedChildren.sort((a,b) => String(a.id).localeCompare(String(b.id))).forEach((child, i) => {
+                    if (!placed.has(child.id)) {
+                        child.fx = childX + (i * 280);
+                        child.fy = childY;
+                        child.x = child.fx; 
+                        child.y = child.fy;
+                        child.dynamicLevel = parseInt(lvl) + 1; 
+                        placed.add(child.id);
+                    }
+                });
+            }
+            currentX += (familyGroup.length * 260) + 100; 
         });
     });
 
-    // Perfectly center the entire assembled grid to the middle of the screen
+    // Center entire grid
     nodes.forEach(n => {
         if (n.x < globalMinX) globalMinX = n.x;
         if (n.x > globalMaxX) globalMaxX = n.x;
@@ -125,11 +210,13 @@ function calculateDeterministicGrid(nodes, links) {
     const graphWidth = globalMaxX - globalMinX;
     const shiftX = (window.innerWidth / 2) - (graphWidth / 2) - globalMinX;
     
-    nodes.forEach(n => { n.x += shiftX; });
+    nodes.forEach(n => { 
+        n.fx += shiftX; 
+        n.x = n.fx; 
+    });
 }
 
 // 2. ORTHOGONAL LINE GENERATOR
-// Draws professional, right-angled family tree lines instead of curvy web connections
 function drawOrthogonalLink(s, t, type) {
     if (type === 'spouse') {
         return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
@@ -159,17 +246,14 @@ export function updateGraphView() {
         document.getElementById('btn-reset-filter').classList.add('hidden');
     }
 
-    // Because physics are disabled, D3 won't map object links automatically. We do it manually:
     displayLinks.forEach(link => {
         if (typeof link.source !== 'object') link.source = displayNodes.find(n => n.id === link.source) || link.source;
         if (typeof link.target !== 'object') link.target = displayNodes.find(n => n.id === link.target) || link.target;
     });
     displayLinks = displayLinks.filter(l => typeof l.source === 'object' && typeof l.target === 'object');
 
-    // Calculate grid strictly before rendering
     calculateDeterministicGrid(displayNodes, displayLinks);
 
-    // Render Links
     const linkSelection = g.selectAll(".link").data(displayLinks, d => d.source.id + "-" + d.target.id + "-" + (d.type || 'parent'));
     const linkEnter = linkSelection.enter().append("path")
         .attr("class", d => `link ${d.type === 'spouse' ? 'link-spouse' : 'link-parent'}`)
@@ -182,7 +266,6 @@ export function updateGraphView() {
     
     linkSelection.exit().remove();
 
-    // Render Nodes
     const nodeSelection = g.selectAll(".node").data(displayNodes, d => d.id);
     const nodeEnter = nodeSelection.enter().append("g")
         .attr("class", "node")
@@ -208,7 +291,6 @@ export function updateGraphView() {
 
     const nodes = nodeEnter.merge(nodeSelection);
     
-    // Animate smoothly to static positions
     nodes.transition().duration(750)
          .style("opacity", 1)
          .attr("transform", d => `translate(${d.x}, ${d.y})`);
@@ -229,6 +311,12 @@ export function updateGraphView() {
         });
 
     nodeSelection.exit().remove();
+
+    simulation.nodes(displayNodes).on("tick", () => {
+        links.attr("d", d => drawOrthogonalLink(d.source, d.target, d.type));
+        nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
+    });
+
     lucide.createIcons();
 }
 
@@ -245,7 +333,6 @@ function handleNodeClick(event, d) {
 }
 
 // 3. OVERRIDE DRAG LOGIC
-// Directly bind movement to mouse coordinates and update lines instantly without physics
 function dragstarted(event, d) {
     d3.select(event.currentTarget).raise(); 
     d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
@@ -259,7 +346,7 @@ function dragged(event, d) {
      .attr("d", l => drawOrthogonalLink(l.source, l.target, l.type));
 }
 function dragended(event, d) {
-    // Drop logic completes cleanly
+    // Keep exact position after drag
 }
 
 export function getDescendantIds(nodeId, visited = new Set()) {
@@ -326,12 +413,11 @@ export function resetZoomAction() {
     svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
 }
 
-import { openModalForm } from './ui.js';
 function addChildDirect(parentId) {
     const parent = globalState.familyData.nodes.find(n => n.id === parentId);
     if (!parent) return;
     const newId = Date.now().toString();
-    const newNode = { id: newId, name: "ילד/ה חדש/ה", role: "ילד", isAlive: true, gender: "neutral", level: (parent.level || 0) + 1 };
+    const newNode = { id: newId, name: "ילד/ה חדש/ה", role: "ילד", isAlive: true, gender: "neutral" };
     globalState.familyData.nodes.push(newNode);
     globalState.familyData.links.push({ source: parentId, target: newId, type: "parent" });
     openModalForm(newNode);
@@ -340,7 +426,7 @@ function addParentDirect(childId) {
     const child = globalState.familyData.nodes.find(n => n.id === childId);
     if (!child) return;
     const newId = Date.now().toString();
-    const newNode = { id: newId, name: "הורה חדש/ה", role: "הורה", isAlive: true, gender: "neutral", level: Math.max(0, (child.level || 0) - 1) };
+    const newNode = { id: newId, name: "הורה חדש/ה", role: "הורה", isAlive: true, gender: "neutral" };
     globalState.familyData.nodes.push(newNode);
     globalState.familyData.links.push({ source: newId, target: childId, type: "parent" });
     openModalForm(newNode);
@@ -349,7 +435,7 @@ function addSpouseDirect(partnerId) {
     const partner = globalState.familyData.nodes.find(n => n.id === partnerId);
     if (!partner) return;
     const newId = Date.now().toString();
-    const newNode = { id: newId, name: "בן/בת זוג חדש/ה", role: "בן/בת זוג", isAlive: true, gender: "neutral", level: partner.level || 0 };
+    const newNode = { id: newId, name: "בן/בת זוג חדש/ה", role: "בן/בת זוג", isAlive: true, gender: "neutral" };
     globalState.familyData.nodes.push(newNode);
     globalState.familyData.links.push({ source: partnerId, target: newId, type: "spouse" });
     openModalForm(newNode);
