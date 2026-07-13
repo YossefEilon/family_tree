@@ -20,13 +20,14 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
 
-    // Reconfigured simulation with balanced forces to avoid chaotic shuffles
+    // Initialize simulation with strict positioning forces targeting precise coordinates
     simulation = d3.forceSimulation()
-        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'spouse' ? 140 : 180).strength(0.5))
-        .force("charge", d3.forceManyBody().strength(-400))
-        .force("collide", d3.forceCollide().radius(nodeWidth * 0.6).iterations(2))
-        .force("x", d3.forceX(window.innerWidth / 2).strength(0.02))
-        .force("y", d3.forceY(d => (d.level || 0) * 240 + 150).strength(1.5));
+        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'spouse' ? 150 : 200).strength(0.2))
+        .force("charge", d3.forceManyBody().strength(-200))
+        .force("collide", d3.forceCollide().radius(nodeWidth * 0.55).iterations(2))
+        // Force nodes strictly toward their calculated group positions to eliminate randomness
+        .force("x", d3.forceX(d => d.targetX || (window.innerWidth / 2)).strength(0.8))
+        .force("y", d3.forceY(d => d.targetY || ((d.level || 0) * 240 + 150)).strength(1.0));
 }
 
 export function resizeCanvas() {
@@ -35,29 +36,30 @@ export function resizeCanvas() {
     }
 }
 
-// Compute deterministic tree coordinates to maintain structural consistency on reload
-function computeStaticLayout(nodes, links) {
+// Compute deterministic coordinates for structured pairs and centered children layout
+function computeDeterministicLayout(nodes, links) {
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
-    const levels = {};
+    const generations = {};
 
-    // Group nodes cleanly into separate generations (levels)
+    // Group nodes cleanly by their tree level
     nodes.forEach(n => {
         const lvl = n.level || 0;
-        if (!levels[lvl]) levels[lvl] = [];
-        levels[lvl].push(n);
+        if (!generations[lvl]) generations[lvl] = [];
+        generations[lvl].push(n);
     });
 
-    // Traverse each generation level to position couples and center children
-    Object.keys(levels).sort((a, b) => a - b).forEach(lvl => {
-        const levelNodes = levels[lvl];
-        let currentX = window.innerWidth / 2 - (levelNodes.length * 150) / 2;
+    // Process each generation sequentially
+    Object.keys(generations).sort((a, b) => a - b).forEach(lvl => {
+        const currentGenNodes = generations[lvl];
+        const processedIds = new Set();
+        
+        // Base center point for the current generation row
+        let currentXX = (window.innerWidth / 2) - ((currentGenNodes.length - 1) * 160);
 
-        const processed = new Set();
+        currentGenNodes.forEach(node => {
+            if (processedIds.has(node.id)) return;
 
-        levelNodes.forEach(node => {
-            if (processed.has(node.id)) return;
-
-            // Detect if this individual has a partner on the same generation level
+            // Look for a spouse relationship link for this specific node
             const spouseLink = links.find(l => 
                 l.type === 'spouse' && 
                 ((typeof l.source === 'object' ? l.source.id : l.source) === node.id || 
@@ -70,18 +72,22 @@ function computeStaticLayout(nodes, links) {
                 const partnerId = sId === node.id ? tId : sId;
                 const partner = nodeMap.get(partnerId);
 
+                // If a partner exists within the same level, align them perfectly side-by-side
                 if (partner && partner.level === node.level) {
-                    // Position couple side-by-side perfectly horizontal
-                    node.x = currentX;
-                    node.y = lvl * 240 + 150;
-                    
-                    partner.x = currentX + 240;
-                    partner.y = lvl * 240 + 150;
+                    node.targetX = currentXX;
+                    node.targetY = lvl * 240 + 150;
 
-                    processed.add(node.id);
-                    processed.add(partner.id);
+                    partner.targetX = currentXX + 250; // Side-by-side gap space
+                    partner.targetY = lvl * 240 + 150;
 
-                    // Find all children tied to this specific couple combination
+                    // Initialize fallback runtime coordinates if empty
+                    if (node.x === undefined || isNaN(node.x)) { node.x = node.targetX; node.y = node.targetY; }
+                    if (partner.x === undefined || isNaN(partner.x)) { partner.x = partner.targetX; partner.y = partner.targetY; }
+
+                    processedIds.add(node.id);
+                    processedIds.add(partner.id);
+
+                    // Find mutual children descending from this parent node
                     const children = nodes.filter(n => 
                         links.some(l => (l.type === 'parent' || !l.type) && 
                             (typeof l.source === 'object' ? l.source.id : l.source) === node.id && 
@@ -89,27 +95,36 @@ function computeStaticLayout(nodes, links) {
                         )
                     );
 
-                    // Center children cleanly beneath the midpoint of their parents
+                    // Position children uniformly directly underneath the couple's midpoint
                     if (children.length > 0) {
-                        const midX = (node.x + partner.x) / 2;
+                        const midX = (node.targetX + partner.targetX) / 2;
                         let childStartX = midX - ((children.length - 1) * 260) / 2;
-                        children.forEach((child, idx) => {
-                            child.x = childStartX + (idx * 260);
-                            child.y = (lvl + 1) * 240 + 150;
+                        
+                        children.forEach((child, index) => {
+                            child.targetX = childStartX + (index * 260);
+                            child.targetY = (parseInt(lvl) + 1) * 240 + 150;
+                            
+                            if (child.x === undefined || isNaN(child.x)) {
+                                child.x = child.targetX;
+                                child.y = child.targetY;
+                            }
                         });
                     }
 
-                    currentX += 500;
+                    currentXX += 540; // Shift block spacing to prevent overlapping next segments
                     return;
                 }
             }
 
-            // Fallback for single individuals with no assigned spouse link
-            if (!processed.has(node.id)) {
-                node.x = currentX;
-                node.y = lvl * 240 + 150;
-                processed.add(node.id);
-                currentX += 260;
+            // Standard layout handling if individual is single
+            if (!processedIds.has(node.id)) {
+                node.targetX = currentXX;
+                node.targetY = lvl * 240 + 150;
+                
+                if (node.x === undefined || isNaN(node.x)) { node.x = node.targetX; node.y = node.targetY; }
+                
+                processedIds.add(node.id);
+                currentXX += 280;
             }
         });
     });
@@ -135,8 +150,8 @@ export function updateGraphView() {
         document.getElementById('btn-reset-filter').classList.add('hidden');
     }
 
-    // Apply strict structural placement algorithm prior to launching simulation
-    computeStaticLayout(displayNodes, displayLinks);
+    // Execute structural calculations to lock down layout blueprints
+    computeDeterministicLayout(displayNodes, displayLinks);
 
     const linkSelection = g.selectAll(".link").data(displayLinks, d => {
         const s = typeof d.source === 'object' ? d.source.id : d.source;
@@ -196,7 +211,7 @@ export function updateGraphView() {
     nodeSelection.exit().remove();
 
     simulation.nodes(displayNodes).on("tick", () => {
-        // Enforce strict runtime constraints matching couples onto identical Y axes
+        // Continuous structural alignment locks couples onto matching horizontal levels
         displayLinks.forEach(l => {
             if (l.type === 'spouse') {
                 const avgY = (l.source.y + l.target.y) / 2;
@@ -218,7 +233,10 @@ export function updateGraphView() {
     });
 
     simulation.force("link").links(displayLinks);
-    simulation.alpha(0.3).restart(); // Lower initial alpha value to prevent drastic bouncing
+    // Bind current target points into the position parameters
+    simulation.force("x").initialize(displayNodes);
+    simulation.force("y").initialize(displayNodes);
+    simulation.alpha(0.4).restart();
     lucide.createIcons();
 }
 
