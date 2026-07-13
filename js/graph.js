@@ -20,7 +20,6 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
     
-    // Physics entirely disabled to allow pure mathematical capsule grid
     simulation = d3.forceSimulation().alphaDecay(1);
 }
 
@@ -31,21 +30,18 @@ export function resizeCanvas() {
 }
 
 // 1. DETERMINISTIC CAPSULE GRID ALGORITHM
-// Groups nodes into indivisible Family Units to guarantee spouses are aligned and children are centered
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
     const units = [];
     const nodeToUnit = new Map();
 
-    // Step 1: Package spouses into indivisible Family Units
     nodes.forEach(n => {
         if (nodeToUnit.has(n.id)) return;
         
         const unitNodes = new Set([n]);
         const queue = [n];
         
-        // Find all connected spouses
         while(queue.length > 0) {
             const current = queue.shift();
             const spouses = links
@@ -63,7 +59,6 @@ function calculateDeterministicGrid(nodes, links) {
         }
 
         const unitArray = Array.from(unitNodes);
-        // Sort chronologically inside the marriage
         unitArray.sort((a, b) => (parseInt(a.birth) || 9999) - (parseInt(b.birth) || 9999));
         
         const unit = {
@@ -72,7 +67,7 @@ function calculateDeterministicGrid(nodes, links) {
             level: 0,
             parents: new Set(),
             children: new Set(),
-            width: unitArray.length * 280, // 280px width allocated per person
+            width: unitArray.length * 280, 
             centerX: 0
         };
 
@@ -80,7 +75,6 @@ function calculateDeterministicGrid(nodes, links) {
         units.push(unit);
     });
 
-    // Step 2: Establish hierarchical connections between Family Units
     links.forEach(l => {
         if (l.type === 'parent' || !l.type) {
             const parentUnit = nodeToUnit.get(l.source.id || l.source);
@@ -92,7 +86,6 @@ function calculateDeterministicGrid(nodes, links) {
         }
     });
 
-    // Step 3: Compute generation levels securely (Children are strictly Level + 1)
     let changed = true;
     let iterations = 0;
     while(changed && iterations < 100) {
@@ -110,7 +103,6 @@ function calculateDeterministicGrid(nodes, links) {
         });
     }
 
-    // Step 4: Map the grid row by row
     const levelsObj = {};
     units.forEach(u => {
         if (!levelsObj[u.level]) levelsObj[u.level] = [];
@@ -121,21 +113,19 @@ function calculateDeterministicGrid(nodes, links) {
 
     Object.keys(levelsObj).sort((a, b) => a - b).forEach(lvl => {
         const rowUnits = levelsObj[lvl];
-        const currentY = lvl * 320 + 150; // Vertical spacing between generations
+        const currentY = lvl * 320 + 150; 
         if (nextAvailableX[lvl] === undefined) nextAvailableX[lvl] = 0;
 
-        // Group sibling units by their parent's coordinates to center them accurately
         rowUnits.forEach(u => {
             if (u.parents.size > 0) {
                 let sumX = 0;
                 u.parents.forEach(p => sumX += p.centerX);
-                u.targetX = sumX / u.parents.size; // Ideal center point based on parents
+                u.targetX = sumX / u.parents.size; 
             } else {
-                u.targetX = -1; // Independent root families
+                u.targetX = -1; 
             }
         });
 
-        // Cluster sibling units together based on their targetX
         const clusters = new Map();
         rowUnits.forEach(u => {
             const key = u.targetX;
@@ -143,29 +133,25 @@ function calculateDeterministicGrid(nodes, links) {
             clusters.get(key).push(u);
         });
 
-        // Place clusters onto the grid safely
         Array.from(clusters.keys()).sort((a, b) => a - b).forEach(key => {
             const cluster = clusters.get(key);
             
-            // Sort siblings chronologically inside the cluster
             cluster.sort((a, b) => {
                 const birthA = parseInt(a.nodes[0].birth) || 9999;
                 const birthB = parseInt(b.nodes[0].birth) || 9999;
                 return birthA - birthB;
             });
             
-            const gap = 80; // Gap between sibling family units
+            const gap = 80; 
             const clusterWidth = cluster.reduce((sum, u) => sum + u.width, 0) + (cluster.length - 1) * gap;
             
             let startX = nextAvailableX[lvl];
             
-            // Try to center the cluster exactly under the parents, without colliding with neighbors
             if (key !== -1) { 
                 const idealStartX = key - (clusterWidth / 2);
                 startX = Math.max(nextAvailableX[lvl], idealStartX);
             }
 
-            // Assign exact, immutable coordinates to the nodes
             cluster.forEach(u => {
                 u.centerX = startX + (u.width / 2);
                 
@@ -179,12 +165,10 @@ function calculateDeterministicGrid(nodes, links) {
                 startX += u.width + gap;
             });
             
-            // Reserve space to prevent the next independent family group from overlapping (Increased margin)
             nextAvailableX[lvl] = startX + 180; 
         });
     });
 
-    // Step 5: Center the entire assembled graph structure to the screen viewport
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
     nodes.forEach(n => {
@@ -201,16 +185,46 @@ function calculateDeterministicGrid(nodes, links) {
     });
 }
 
-// 2. SMOOTH CURVE GENERATOR
-// Uses Bezier curves to visually separate families and prevent horizontal line overlapping
-function drawSmoothLink(s, t, type) {
+// 2. ADVANCED SMOOTH CURVE GENERATOR (U-SHAPE UNION FOR SPOUSES)
+function drawSmoothLink(d, allLinks) {
+    const s = d.source;
+    const t = d.target;
+    const type = d.type;
+
     if (type === 'spouse') {
-        return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+        // Create a 'U' shaped curve underneath the spouse cards
+        const startY = s.y + nodeHeight / 2; // Bottom of node
+        const endY = t.y + nodeHeight / 2;
+        const midX = (s.x + t.x) / 2;
+        const controlY = startY + 60; // Curve dips 60px downwards
+
+        // Quadratic Bezier Curve
+        return `M ${s.x} ${startY} Q ${midX} ${controlY} ${t.x} ${endY}`;
     } else {
-        const startY = s.y + nodeHeight / 2;
+        // Child connection - Defaults to dropping from the parent's center
+        let startX = s.x;
+        let startY = s.y + nodeHeight / 2;
+
+        // Search if this parent is part of a marriage (spouse link exists)
+        const spouseLink = allLinks.find(l => 
+            l.type === 'spouse' && 
+            (l.source.id === s.id || l.target.id === s.id)
+        );
+
+        if (spouseLink) {
+            const partner = (spouseLink.source.id === s.id) ? spouseLink.target : spouseLink.source;
+            
+            // If the partner is horizontally aligned with the parent, calculate the union point
+            if (Math.abs(partner.y - s.y) < 10) {
+                startX = (s.x + partner.x) / 2; 
+                // Math logic: Midpoint of a Q curve dropping 60px is exactly 30px down.
+                startY = s.y + nodeHeight / 2 + 30; 
+            }
+        }
+
         const endY = t.y - nodeHeight / 2;
-        // Smooth cubic bezier curve ensures each connection has a unique path
-        return `M ${s.x} ${startY} C ${s.x} ${(startY + endY) / 2}, ${t.x} ${(startY + endY) / 2}, ${t.x} ${endY}`;
+        // Smooth Cubic Bezier connecting the union point to the child
+        return `M ${startX} ${startY} C ${startX} ${(startY + endY) / 2}, ${t.x} ${(startY + endY) / 2}, ${t.x} ${endY}`;
     }
 }
 
@@ -240,7 +254,6 @@ export function updateGraphView() {
     });
     displayLinks = displayLinks.filter(l => typeof l.source === 'object' && typeof l.target === 'object');
 
-    // Execute structural clustering before any rendering occurs
     calculateDeterministicGrid(displayNodes, displayLinks);
 
     const linkSelection = g.selectAll(".link").data(displayLinks, d => d.source.id + "-" + d.target.id + "-" + (d.type || 'parent'));
@@ -249,9 +262,10 @@ export function updateGraphView() {
         .style("opacity", 0);
 
     const links = linkEnter.merge(linkSelection);
+    // Notice we pass displayLinks into the function to dynamically find the spouse lines
     links.transition().duration(750)
          .style("opacity", 1)
-         .attr("d", d => drawSmoothLink(d.source, d.target, d.type));
+         .attr("d", d => drawSmoothLink(d, displayLinks));
     
     linkSelection.exit().remove();
 
@@ -302,7 +316,7 @@ export function updateGraphView() {
     nodeSelection.exit().remove();
 
     simulation.nodes(displayNodes).on("tick", () => {
-        links.attr("d", d => drawSmoothLink(d.source, d.target, d.type));
+        links.attr("d", d => drawSmoothLink(d, displayLinks));
         nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
     });
 
@@ -331,11 +345,12 @@ function dragged(event, d) {
     d.y = event.y; 
     d3.select(this).attr("transform", `translate(${d.x}, ${d.y})`);
     
+    const allRenderedLinks = g.selectAll(".link").data();
     g.selectAll(".link").filter(l => l.source.id === d.id || l.target.id === d.id)
-     .attr("d", l => drawSmoothLink(l.source, l.target, l.type));
+     .attr("d", l => drawSmoothLink(l, allRenderedLinks));
 }
 function dragended(event, d) {
-    // End frame silently
+    // Keep exact position after drag
 }
 
 export function getDescendantIds(nodeId, visited = new Set()) {
