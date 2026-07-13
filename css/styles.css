@@ -1,8 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap');
 
 body { font-family: 'Heebo', sans-serif; background-color: #f8fafc; overflow: hidden; margin: 0; padding: 0; }
-svg { width: 100vw; height: 100vh; cursor: grab; display: block; }
-svg:active { cursor: grabbing; }
+
+/* The Fix: Target the specific canvas ID so we don't accidentally enlarge SVG icons */
+#tree-canvas { width: 100vw; height: 100vh; cursor: grab; display: block; }
+#tree-canvas:active { cursor: grabbing; }
 
 .link { fill: none; stroke: #cbd5e1; stroke-width: 2px; transition: all 0.3s ease; }
 .link:hover { stroke: #94a3b8; stroke-width: 3px; }
