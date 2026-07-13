@@ -1,6 +1,6 @@
 import { globalState } from './config.js';
 import { fetchFamilyDatabase, saveToCloud } from './api.js';
-import { initD3Graph, updateGraphView, resizeCanvas, zoomInAction, zoomOutAction, resetZoomAction, clearHighlights } from './graph.js';
+import { initD3Graph, updateGraphView, resizeCanvas, zoomInAction, zoomOutAction, resetZoomAction, clearHighlights } from './graph.js?v=2';
 import { openModal, closeModal, openModalForm, toggleDeathInputs, showToast, showConfirm } from './ui.js';
 
 window.addEventListener('DOMContentLoaded', () => {
