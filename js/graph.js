@@ -217,7 +217,6 @@ function dragended(event, d) {
     d.fx = null; d.fy = null;
 }
 
-// לוגיקת הוספה ישירה מהבלונים
 import { openModalForm } from './ui.js';
 function addChildDirect(parentId) {
     const parent = globalState.familyData.nodes.find(n => n.id === parentId);
