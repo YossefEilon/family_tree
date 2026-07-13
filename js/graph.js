@@ -1,175 +1,340 @@
-import { globalState } from './config.js';
-import { fetchFamilyDatabase, saveToCloud } from './api.js';
-import { initD3Graph, updateGraphView, resizeCanvas, zoomInAction, zoomOutAction, resetZoomAction, clearHighlights } from './graph.js?v=2';
-import { openModal, closeModal, openModalForm, toggleDeathInputs, showToast, showConfirm } from './ui.js';
+import { globalState, nodeWidth, nodeHeight } from './config.js';
+import { createNodeCard, createActionBubbles, showNodeDetailsById, filterFamilyById } from './ui.js';
 
-window.addEventListener('DOMContentLoaded', () => {
-    initD3Graph();
-    window.addEventListener('resize', resizeCanvas);
+export let svg, g, zoom, simulation;
 
-    const overlay = document.getElementById('loading-overlay');
-    overlay.style.display = 'flex';
-    setTimeout(() => overlay.style.opacity = '1', 10);
+export function initD3Graph() {
+    svg = d3.select("#tree-canvas");
+    g = svg.append("g");
 
-    fetchFamilyDatabase(
-        () => { 
-            overlay.style.opacity = '0';
-            setTimeout(() => overlay.style.display = 'none', 500);
-            document.getElementById('app-container').classList.remove('opacity-0');
-            updateGraphView();
-        },
-        (error) => { 
-            document.getElementById('loader-spinner').style.display = 'none';
-            document.getElementById('loader-title').innerText = "שגיאת תקשורת";
-            document.getElementById('loader-subtitle').innerHTML = `לא הצלחנו למשוך את המידע מגוגל שיטס.<br><br><span class="text-rose-400 text-xs">שגיאה: ${error.toString()}</span>`;
-            document.getElementById('setup-instructions').classList.remove('hidden');
-            lucide.createIcons();
-        },
-        () => { 
-            document.getElementById('loader-spinner').style.display = 'none';
-            document.getElementById('loader-title').innerText = "חיבור ענן לא מוגדר";
-            document.getElementById('loader-subtitle').innerText = "לא נמצאה כתובת API URL מוגדרת. באפשרותך להמשיך להשתמש במידע דמו מקומי.";
-            document.getElementById('setup-instructions').classList.remove('hidden');
-            lucide.createIcons();
-        }
-    );
-
-    document.getElementById('btn-zoom-in').addEventListener('click', zoomInAction);
-    document.getElementById('btn-zoom-out').addEventListener('click', zoomOutAction);
-    document.getElementById('btn-zoom-reset').addEventListener('click', resetZoomAction);
-    document.getElementById('btn-reset-filter').addEventListener('click', () => { globalState.filteredRootId = null; updateGraphView(); });
-
-    document.getElementById('btn-enter-demo').addEventListener('click', () => {
-        import('./config.js').then(cfg => {
-            globalState.familyData = JSON.parse(JSON.stringify(cfg.demoFamilyData));
-            document.getElementById('demo-badge').classList.replace('hidden', 'flex');
-            overlay.style.opacity = '0';
-            setTimeout(() => overlay.style.display = 'none', 500);
-            updateGraphView();
-        });
-    });
-
-    document.getElementById('btn-settings-trigger').addEventListener('click', () => {
-        if (globalState.isAdmin) openModal('settings-menu-modal');
-        else openModal('passcode-modal');
-    });
-
-    document.getElementById('btn-close-passcode').addEventListener('click', closeModal);
-    document.getElementById('btn-submit-passcode').addEventListener('click', () => {
-        if (document.getElementById('admin-passcode-input').value === "Eilon") {
-            globalState.isAdmin = true;
-            document.getElementById('admin-badge').classList.replace('hidden', 'flex');
-            showToast("מצב עריכה פתוח כעת!");
-            closeModal();
-            updateGraphView();
-        } else {
-            showToast("קוד גישה שגוי.", "error");
+    svg.on("click", (event) => {
+        if (event.target === svg.node() || event.target.tagName === 'rect') {
+            d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
+            clearHighlights();
         }
     });
 
-    document.getElementById('btn-switch-to-edit').addEventListener('click', () => {
-        if (globalState.isAdmin) openModalForm(globalState.currentNode);
-        else openModal('passcode-modal');
+    zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => {
+        g.attr("transform", event.transform);
+    });
+    svg.call(zoom);
+    resizeCanvas();
+
+    // Reconfigured simulation with balanced forces to avoid chaotic shuffles
+    simulation = d3.forceSimulation()
+        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'spouse' ? 140 : 180).strength(0.5))
+        .force("charge", d3.forceManyBody().strength(-400))
+        .force("collide", d3.forceCollide().radius(nodeWidth * 0.6).iterations(2))
+        .force("x", d3.forceX(window.innerWidth / 2).strength(0.02))
+        .force("y", d3.forceY(d => (d.level || 0) * 240 + 150).strength(1.5));
+}
+
+export function resizeCanvas() {
+    if (svg) {
+        svg.attr("width", window.innerWidth).attr("height", window.innerHeight);
+    }
+}
+
+// Compute deterministic tree coordinates to maintain structural consistency on reload
+function computeStaticLayout(nodes, links) {
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    const levels = {};
+
+    // Group nodes cleanly into separate generations (levels)
+    nodes.forEach(n => {
+        const lvl = n.level || 0;
+        if (!levels[lvl]) levels[lvl] = [];
+        levels[lvl].push(n);
     });
 
-    document.querySelectorAll('.btn-close-modal').forEach(b => b.addEventListener('click', closeModal));
-    document.getElementById('modal-backdrop').addEventListener('click', closeModal);
-    document.getElementById('btn-close-settings-menu').addEventListener('click', closeModal);
-    document.getElementById('btn-close-confirm').addEventListener('click', closeModal);
+    // Traverse each generation level to position couples and center children
+    Object.keys(levels).sort((a, b) => a - b).forEach(lvl => {
+        const levelNodes = levels[lvl];
+        let currentX = window.innerWidth / 2 - (levelNodes.length * 150) / 2;
 
-    document.getElementById('btn-cloud-save').addEventListener('click', () => { closeModal(); saveToCloud(); });
-    document.getElementById('btn-logout-admin').addEventListener('click', () => {
-        globalState.isAdmin = false;
-        document.getElementById('admin-badge').classList.replace('flex', 'hidden');
-        closeModal(); updateGraphView(); showToast("מצב עריכה ננעל.");
-    });
-    document.getElementById('btn-export-html').addEventListener('click', () => {
-        closeModal();
-        globalState.filteredRootId = null; clearHighlights(); updateGraphView();
-        import('./api.js').then(api => {
-            let htmlContent = document.documentElement.outerHTML;
-            const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const dl = document.createElement("a");
-            dl.href = url; dl.download = "family_graph_updated.html";
-            document.body.appendChild(dl); dl.click(); document.body.removeChild(dl);
+        const processed = new Set();
+
+        levelNodes.forEach(node => {
+            if (processed.has(node.id)) return;
+
+            // Detect if this individual has a partner on the same generation level
+            const spouseLink = links.find(l => 
+                l.type === 'spouse' && 
+                ((typeof l.source === 'object' ? l.source.id : l.source) === node.id || 
+                 (typeof l.target === 'object' ? l.target.id : l.target) === node.id)
+            );
+
+            if (spouseLink) {
+                const sId = typeof spouseLink.source === 'object' ? spouseLink.source.id : spouseLink.source;
+                const tId = typeof spouseLink.target === 'object' ? spouseLink.target.id : spouseLink.target;
+                const partnerId = sId === node.id ? tId : sId;
+                const partner = nodeMap.get(partnerId);
+
+                if (partner && partner.level === node.level) {
+                    // Position couple side-by-side perfectly horizontal
+                    node.x = currentX;
+                    node.y = lvl * 240 + 150;
+                    
+                    partner.x = currentX + 240;
+                    partner.y = lvl * 240 + 150;
+
+                    processed.add(node.id);
+                    processed.add(partner.id);
+
+                    // Find all children tied to this specific couple combination
+                    const children = nodes.filter(n => 
+                        links.some(l => (l.type === 'parent' || !l.type) && 
+                            (typeof l.source === 'object' ? l.source.id : l.source) === node.id && 
+                            (typeof l.target === 'object' ? l.target.id : l.target) === n.id
+                        )
+                    );
+
+                    // Center children cleanly beneath the midpoint of their parents
+                    if (children.length > 0) {
+                        const midX = (node.x + partner.x) / 2;
+                        let childStartX = midX - ((children.length - 1) * 260) / 2;
+                        children.forEach((child, idx) => {
+                            child.x = childStartX + (idx * 260);
+                            child.y = (lvl + 1) * 240 + 150;
+                        });
+                    }
+
+                    currentX += 500;
+                    return;
+                }
+            }
+
+            // Fallback for single individuals with no assigned spouse link
+            if (!processed.has(node.id)) {
+                node.x = currentX;
+                node.y = lvl * 240 + 150;
+                processed.add(node.id);
+                currentX += 260;
+            }
         });
     });
+}
 
-    document.getElementById('edit-status').addEventListener('change', toggleDeathInputs);
+export function updateGraphView() {
+    let displayNodes = globalState.familyData.nodes;
+    let displayLinks = globalState.familyData.links;
 
-    document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('edit-pic-upload').click());
-    document.getElementById('edit-pic-upload').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = 250; canvas.height = 250;
-                canvas.getContext('2d').drawImage(img, 0, 0, 250, 250);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                document.getElementById('edit-pic-base64').value = dataUrl;
-                document.getElementById('edit-pic-preview').src = dataUrl;
-                document.getElementById('edit-pic-preview').classList.remove('hidden');
-                document.getElementById('edit-pic-icon').classList.add('hidden');
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
+    if (globalState.filteredRootId) {
+        const descendantIds = getDescendantIds(globalState.filteredRootId);
+        const spouseIds = getSpouseIds(globalState.filteredRootId);
+        const allowedIds = new Set([...descendantIds, ...spouseIds, globalState.filteredRootId]);
+
+        displayNodes = globalState.familyData.nodes.filter(n => allowedIds.has(n.id));
+        displayLinks = globalState.familyData.links.filter(l => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            return allowedIds.has(s) && allowedIds.has(t);
+        });
+        document.getElementById('btn-reset-filter').classList.remove('hidden');
+    } else {
+        document.getElementById('btn-reset-filter').classList.add('hidden');
+    }
+
+    // Apply strict structural placement algorithm prior to launching simulation
+    computeStaticLayout(displayNodes, displayLinks);
+
+    const linkSelection = g.selectAll(".link").data(displayLinks, d => {
+        const s = typeof d.source === 'object' ? d.source.id : d.source;
+        const t = typeof d.target === 'object' ? d.target.id : d.target;
+        return s + "-" + t + "-" + (d.type || 'parent');
     });
 
-    document.getElementById('btn-save-node').addEventListener('click', () => {
-        const node = globalState.familyData.nodes.find(n => n.id === globalState.currentNode.id);
-        if (node) {
-            node.name = document.getElementById('edit-name').value;
-            node.previousLastName = document.getElementById('edit-prev-name').value;
-            node.birth = document.getElementById('edit-birth').value;
-            node.hebrewBirthDate = document.getElementById('edit-hebrew-birth').value;
-            node.isAlive = document.getElementById('edit-status').value === "true";
-            node.death = node.isAlive ? "" : document.getElementById('edit-death').value;
-            node.hebrewDeathDate = node.isAlive ? "" : document.getElementById('edit-hebrew-death').value;
-            node.role = document.getElementById('edit-role').value;
-            node.gender = document.getElementById('edit-gender').value;
-            node.birthCountry = document.getElementById('edit-country').value;
-            node.lifeStory = document.getElementById('edit-story').value;
-            node.profilePic = document.getElementById('edit-pic-base64').value;
+    const linkEnter = linkSelection.enter().append("path")
+        .attr("class", d => `link ${d.type === 'spouse' ? 'link-spouse' : 'link-parent'}`)
+        .style("opacity", 0);
+
+    const links = linkEnter.merge(linkSelection);
+    links.transition().duration(500).style("opacity", 1);
+    linkSelection.exit().remove();
+
+    const nodeSelection = g.selectAll(".node").data(displayNodes, d => d.id);
+    const nodeEnter = nodeSelection.enter().append("g")
+        .attr("class", "node")
+        .style("opacity", 0)
+        .call(d3.drag()
+            .filter(event => !event.target.closest('.node-actions'))
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
+
+    nodeEnter.append("foreignObject")
+        .attr("class", "main-card")
+        .attr("width", nodeWidth).attr("height", nodeHeight)
+        .attr("x", -nodeWidth / 2).attr("y", -nodeHeight / 2)
+        .on("click", handleNodeClick);
+
+    nodeEnter.append("foreignObject")
+        .attr("class", "node-actions")
+        .attr("width", 440).attr("height", 240)
+        .attr("x", -220).attr("y", -120) 
+        .style("opacity", 0).style("pointer-events", "none").style("transition", "opacity 0.2s ease");
+
+    const nodes = nodeEnter.merge(nodeSelection);
+    nodes.transition().duration(500).style("opacity", 1);
+    nodes.select(".main-card").html(d => createNodeCard(d));
+    
+    nodes.select(".node-actions")
+        .html(d => createActionBubbles(d))
+        .each(function(d) {
+            const sel = d3.select(this);
+            
+            sel.select(".action-btn-details").on("click", (event) => showNodeDetailsById(d.id, event));
+            sel.select(".action-btn-family").on("click", (event) => filterFamilyById(d.id, event));
+
+            if (globalState.isAdmin) {
+                sel.select(".action-btn-add-parent").on("click", (event) => { event.stopPropagation(); addParentDirect(d.id); });
+                sel.select(".action-btn-add-child").on("click", (event) => { event.stopPropagation(); addChildDirect(d.id); });
+                sel.select(".action-btn-add-spouse").on("click", (event) => { event.stopPropagation(); addSpouseDirect(d.id); });
+            }
+        });
+
+    nodeSelection.exit().remove();
+
+    simulation.nodes(displayNodes).on("tick", () => {
+        // Enforce strict runtime constraints matching couples onto identical Y axes
+        displayLinks.forEach(l => {
+            if (l.type === 'spouse') {
+                const avgY = (l.source.y + l.target.y) / 2;
+                l.source.y = avgY;
+                l.target.y = avgY;
+            }
+        });
+
+        links.attr("d", d => {
+            if (d.type === 'spouse') {
+                return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
+            } else {
+                const sourceY = d.source.y + (nodeHeight / 2);
+                const targetY = d.target.y - (nodeHeight / 2);
+                return `M ${d.source.x} ${sourceY} C ${d.source.x} ${(sourceY + targetY) / 2}, ${d.target.x} ${(sourceY + targetY) / 2}, ${d.target.x} ${targetY}`;
+            }
+        });
+        nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
+    });
+
+    simulation.force("link").links(displayLinks);
+    simulation.alpha(0.3).restart(); // Lower initial alpha value to prevent drastic bouncing
+    lucide.createIcons();
+}
+
+function handleNodeClick(event, d) {
+    if (event.defaultPrevented) return;
+    event.stopPropagation();
+    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
+
+    const parentNode = d3.select(event.currentTarget.parentNode);
+    parentNode.select(".node-actions").style("opacity", 1).style("pointer-events", "auto");
+    parentNode.raise();
+    
+    highlightDescendants(d.id);
+}
+
+export function getDescendantIds(nodeId, visited = new Set()) {
+    if (visited.has(nodeId)) return visited;
+    visited.add(nodeId);
+    const childrenIds = globalState.familyData.links
+        .filter(l => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            return s === nodeId && (l.type === 'parent' || !l.type);
+        })
+        .map(l => typeof l.target === 'object' ? l.target.id : l.target);
+    childrenIds.forEach(cId => getDescendantIds(cId, visited));
+    return visited;
+}
+
+export function getSpouseIds(nodeId) {
+    const spouses = new Set();
+    globalState.familyData.links.forEach(l => {
+        if (l.type === 'spouse') {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            if (s === nodeId) spouses.add(t);
+            if (t === nodeId) spouses.add(s);
         }
-        closeModal(); updateGraphView();
-        showToast("הרשומה עודכנה, אל תשכח לסנכרן לענן!");
     });
+    return spouses;
+}
 
-    document.getElementById('btn-add-child-modal').addEventListener('click', () => {
-        const parentId = globalState.currentNode.id;
-        closeModal();
-        const parent = globalState.familyData.nodes.find(n => n.id === parentId);
-        const newId = Date.now().toString();
-        const newNode = { id: newId, name: "ילד/ה חדש/ה", role: "ילד", isAlive: true, gender: "neutral", level: (parent.level || 0) + 1, x: parent.x, y: parent.y + 200 };
-        globalState.familyData.nodes.push(newNode);
-        globalState.familyData.links.push({ source: parentId, target: newId, type: "parent" });
-        openModalForm(newNode);
-    });
+function highlightDescendants(rootId) {
+    const descIds = getDescendantIds(rootId);
+    g.selectAll(".link").classed("link-dimmed", true).classed("link-highlight", false);
+    g.selectAll(".node").classed("node-dimmed", true);
 
-    document.getElementById('btn-delete-node').addEventListener('click', () => {
-        showConfirm(`למחוק את ${globalState.currentNode.name}?`, "פעולה זו תסיר את הישות מהגרף ותנתק את קשריה המשפחתיים.", () => {
-            globalState.familyData.nodes = globalState.familyData.nodes.filter(n => n.id !== globalState.currentNode.id);
-            globalState.familyData.links = globalState.familyData.links.filter(l => {
-                const s = typeof l.source === 'object' ? l.source.id : l.source;
-                const t = typeof l.target === 'object' ? l.target.id : l.target;
-                return s !== globalState.currentNode.id && t !== globalState.currentNode.id;
-            });
-            closeModal(); updateGraphView(); showToast("הישות נמחקה מהגרף המקומי.");
-        });
-    });
+    g.selectAll(".link").filter(d => {
+        const s = typeof d.source === 'object' ? d.source.id : d.source;
+        return descIds.has(s) && (d.type === 'parent' || !d.type);
+    }).classed("link-dimmed", false).classed("link-highlight", true);
 
-    document.getElementById('btn-add-link').addEventListener('click', () => {
-        const targetId = document.getElementById('add-link-target').value;
-        const linkType = document.getElementById('add-link-type').value;
-        if (!targetId) return;
-        const s = linkType === 'parent' ? targetId : globalState.currentNode.id;
-        const t = linkType === 'parent' ? globalState.currentNode.id : targetId;
-        globalState.familyData.links.push({ source: s, target: t, type: linkType });
-        closeModal(); updateGraphView(); showToast("הקשר המשפחתי החדש נוצר!");
-    });
-});
+    g.selectAll(".node").filter(d => descIds.has(d.id)).classed("node-dimmed", false);
+}
+
+export function clearHighlights() {
+    g.selectAll(".link").classed("link-dimmed", false).classed("link-highlight", false);
+    g.selectAll(".node").classed("node-dimmed", false);
+}
+
+export function zoomInAction() { svg.transition().duration(300).call(zoom.scaleBy, 1.3); }
+export function zoomOutAction() { svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.3); }
+export function resetZoomAction() {
+    const bounds = g.node().getBBox();
+    const parent = svg.node();
+    const fullWidth = parent.clientWidth || window.innerWidth;
+    const fullHeight = parent.clientHeight || window.innerHeight;
+    const width = bounds.width;
+    const height = bounds.height;
+    const midX = bounds.x + width / 2;
+    const midY = bounds.y + height / 2;
+
+    if (width === 0 || height === 0) return; 
+
+    const scale = Math.max(0.2, Math.min(1.2, 0.85 / Math.max(width / fullWidth, height / fullHeight)));
+    const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
+
+    svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+}
+
+function dragstarted(event, d) {
+    d3.select(event.currentTarget).raise(); 
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x; d.fy = d.y;
+    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
+}
+function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null; d.fy = null;
+}
+
+import { openModalForm } from './ui.js';
+function addChildDirect(parentId) {
+    const parent = globalState.familyData.nodes.find(n => n.id === parentId);
+    if (!parent) return;
+    const newId = Date.now().toString();
+    const newNode = { id: newId, name: "ילד/ה חדש/ה", role: "ילד", isAlive: true, gender: "neutral", level: (parent.level || 0) + 1, x: parent.x, y: parent.y + 200 };
+    globalState.familyData.nodes.push(newNode);
+    globalState.familyData.links.push({ source: parentId, target: newId, type: "parent" });
+    openModalForm(newNode);
+}
+function addParentDirect(childId) {
+    const child = globalState.familyData.nodes.find(n => n.id === childId);
+    if (!child) return;
+    const newId = Date.now().toString();
+    const newNode = { id: newId, name: "הורה חדש/ה", role: "הורה", isAlive: true, gender: "neutral", level: Math.max(0, (child.level || 0) - 1), x: child.x, y: Math.max(50, child.y - 200) };
+    globalState.familyData.nodes.push(newNode);
+    globalState.familyData.links.push({ source: newId, target: childId, type: "parent" });
+    openModalForm(newNode);
+}
+function addSpouseDirect(partnerId) {
+    const partner = globalState.familyData.nodes.find(n => n.id === partnerId);
+    if (!partner) return;
+    const newId = Date.now().toString();
+    const newNode = { id: newId, name: "בן/בת זוג חדש/ה", role: "בן/בת זוג", isAlive: true, gender: "neutral", level: partner.level || 0, x: partner.x - 140, y: partner.y };
+    globalState.familyData.nodes.push(newNode);
+    globalState.familyData.links.push({ source: partnerId, target: newId, type: "spouse" });
+    openModalForm(newNode);
+}
