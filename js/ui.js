@@ -1,5 +1,5 @@
 import { globalState, nodeWidth, nodeHeight } from './config.js';
-import { updateGraphView, getDescendantIds, getSpouseIds, clearHighlights } from './graph.js';
+import { updateGraphView, getDescendantIds, clearHighlights } from './graph.js';
 
 export function createNodeCard(data) {
     let colorClasses = "border-slate-200 text-slate-700 bg-white";
@@ -148,7 +148,7 @@ export function showNodeDetailsById(id, event) {
 
     const descCount = getDescendantIds(data.id).size - 1;
     if (descCount > 0) {
-        document.getElementById('view-descendants-text').innerText = `${descCount} צאצאים`;
+        document.getElementById('view-descendants-text').innerText = `${descCount} צาצאים`;
         document.getElementById('view-descendants').classList.remove('hidden');
     } else {
         document.getElementById('view-descendants').classList.add('hidden');
