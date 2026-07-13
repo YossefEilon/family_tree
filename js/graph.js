@@ -20,13 +20,11 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
 
-    // Strict constraint parameters using low alpha values to prevent erratic shuffles
+    // Setup simulation using minimal force parameters to allow immediate static snapping
     simulation = d3.forceSimulation()
-        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'spouse' ? 140 : 180).strength(0.4))
-        .force("charge", d3.forceManyBody().strength(-300))
-        .force("collide", d3.forceCollide().radius(nodeWidth * 0.55).iterations(2))
-        .force("x", d3.forceX(d => d.targetX || (window.innerWidth / 2)).strength(0.7))
-        .force("y", d3.forceY(d => d.targetY || ((d.level || 0) * 240 + 150)).strength(1.0));
+        .force("link", d3.forceLink().id(d => d.id).distance(d => d.type === 'spouse' ? 150 : 200).strength(0.1))
+        .force("charge", d3.forceManyBody().strength(-100))
+        .force("collide", d3.forceCollide().radius(nodeWidth * 0.55));
 }
 
 export function resizeCanvas() {
@@ -35,29 +33,34 @@ export function resizeCanvas() {
     }
 }
 
-// Compute deterministic coordinates and assign fixed initial positions to block random shuffling
+// Compute perfect static coordinates and lock them explicitly to prevent dynamic floating shuffles
 function computeDeterministicLayout(nodes, links) {
+    if (!nodes || nodes.length === 0) return;
+
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
     const generations = {};
 
-    // Distribute tree elements cleanly by their level property
+    // Group elements into separate arrays by generational tree level
     nodes.forEach(n => {
         const lvl = n.level || 0;
         if (!generations[lvl]) generations[lvl] = [];
         generations[lvl].push(n);
     });
 
+    // Parse each generation sequentially to establish fixed grid alignments
     Object.keys(generations).sort((a, b) => a - b).forEach(lvl => {
         const currentGenNodes = generations[lvl];
         const processedIds = new Set();
         
-        // Centered starting boundary calculation per generational row
-        let currentXX = (window.innerWidth / 2) - ((currentGenNodes.length - 1) * 160);
+        // Horizontal centering calculations for row distribution
+        const totalRowWidth = (currentGenNodes.length - 1) * 280;
+        let currentXX = (window.innerWidth / 2) - (totalRowWidth / 2);
+        const assignedY = lvl * 260 + 150;
 
         currentGenNodes.forEach(node => {
             if (processedIds.has(node.id)) return;
 
-            // Detect matching spouse assignments
+            // Search for an active generational marriage partner relation link
             const spouseLink = links.find(l => 
                 l.type === 'spouse' && 
                 ((typeof l.source === 'object' ? l.source.id : l.source) === node.id || 
@@ -71,25 +74,19 @@ function computeDeterministicLayout(nodes, links) {
                 const partner = nodeMap.get(partnerId);
 
                 if (partner && partner.level === node.level) {
-                    const assignedY = lvl * 240 + 150;
-                    
-                    // Assign target positions
-                    node.targetX = currentXX;
-                    node.targetY = assignedY;
-                    partner.targetX = currentXX + 250;
-                    partner.targetY = assignedY;
+                    // Lock couple side-by-side using fixed coordinates (fx, fy) to bypass D3 physics
+                    node.fx = currentXX;
+                    node.fy = assignedY;
+                    node.x = node.fx; node.y = node.fy;
 
-                    // Hard overwrite D3 coordinates to completely override internal physics randomization
-                    node.x = node.targetX; node.y = node.targetY;
-                    node.px = node.x; node.py = node.y;
-                    
-                    partner.x = partner.targetX; partner.y = partner.targetY;
-                    partner.px = partner.x; partner.py = partner.y;
+                    partner.fx = currentXX + 250;
+                    partner.fy = assignedY;
+                    partner.x = partner.fx; partner.y = partner.partnerY;
 
                     processedIds.add(node.id);
                     processedIds.add(partner.id);
 
-                    // Track down mutual children descending from parents
+                    // Map out children descending from this parent relationship
                     const children = nodes.filter(n => 
                         links.some(l => (l.type === 'parent' || !l.type) && 
                             ((typeof l.source === 'object' ? l.source.id : l.source) === node.id || 
@@ -98,35 +95,29 @@ function computeDeterministicLayout(nodes, links) {
                         )
                     );
 
-                    // Center children uniformly directly underneath the couple's midpoint coordinates
+                    // Center children directly underneath the mid-point of the couple block
                     if (children.length > 0) {
-                        const midX = (node.targetX + partner.targetX) / 2;
-                        let childStartX = midX - ((children.length - 1) * 260) / 2;
+                        const midPointX = (node.fx + partner.fx) / 2;
+                        let childStartX = midPointX - ((children.length - 1) * 270) / 2;
+                        const nextGenY = (parseInt(lvl) + 1) * 260 + 150;
                         
                         children.forEach((child, index) => {
-                            child.targetX = childStartX + (index * 260);
-                            child.targetY = (parseInt(lvl) + 1) * 240 + 150;
-                            
-                            // Hard overwrite child entry frames
-                            child.x = child.targetX;
-                            child.y = child.targetY;
-                            child.px = child.x;
-                            child.py = child.y;
+                            child.fx = childStartX + (index * 270);
+                            child.fy = nextGenY;
+                            child.x = child.fx; child.y = child.fy;
                         });
                     }
 
-                    currentXX += 540;
+                    currentXX += 560; // Offset spacing sequence to prevent overlap anomalies
                     return;
                 }
             }
 
-            // Fallback rules targeting single unpartnered nodes
+            // Lock single isolated individuals cleanly into row matrix
             if (!processedIds.has(node.id)) {
-                node.targetX = currentXX;
-                node.targetY = lvl * 240 + 150;
-                
-                node.x = node.targetX; node.y = node.targetY;
-                node.px = node.x; node.py = node.y;
+                node.fx = currentXX;
+                node.fy = assignedY;
+                node.x = node.fx; node.y = node.fy;
                 
                 processedIds.add(node.id);
                 currentXX += 280;
@@ -155,7 +146,7 @@ export function updateGraphView() {
         document.getElementById('btn-reset-filter').classList.add('hidden');
     }
 
-    // Force layout constraints to process coordinates cleanly
+    // Apply strict geometric positioning rules prior to simulation execution
     computeDeterministicLayout(displayNodes, displayLinks);
 
     const linkSelection = g.selectAll(".link").data(displayLinks, d => {
@@ -202,7 +193,6 @@ export function updateGraphView() {
         .html(d => createActionBubbles(d))
         .each(function(d) {
             const sel = d3.select(this);
-            
             sel.select(".action-btn-details").on("click", (event) => showNodeDetailsById(d.id, event));
             sel.select(".action-btn-family").on("click", (event) => filterFamilyById(d.id, event));
 
@@ -216,15 +206,6 @@ export function updateGraphView() {
     nodeSelection.exit().remove();
 
     simulation.nodes(displayNodes).on("tick", () => {
-        // Enforce horizontal couple constraints during frame adjustments
-        displayLinks.forEach(l => {
-            if (l.type === 'spouse') {
-                const avgY = (l.source.y + l.target.y) / 2;
-                l.source.y = avgY;
-                l.target.y = avgY;
-            }
-        });
-
         links.attr("d", d => {
             if (d.type === 'spouse') {
                 return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
@@ -238,9 +219,7 @@ export function updateGraphView() {
     });
 
     simulation.force("link").links(displayLinks);
-    simulation.force("x").initialize(displayNodes);
-    simulation.force("y").initialize(displayNodes);
-    simulation.alpha(0.2).restart(); // Kept low to keep elements firmly locked to positions
+    simulation.alpha(0.1).restart(); // Minimal restart values trigger deterministic alignment quickly
     lucide.createIcons();
 }
 
@@ -323,13 +302,15 @@ export function resetZoomAction() {
 function dragstarted(event, d) {
     d3.select(event.currentTarget).raise(); 
     if (!event.active) simulation.alphaTarget(0.3).restart();
-    d.fx = d.x; d.fy = d.y;
+    // Allow coordinates to unlock temporarily during active drag interactions
+    d.fx = null; d.fy = null;
     d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
 }
-function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+function dragged(event, d) { d.x = event.x; d.y = event.y; }
 function dragended(event, d) {
     if (!event.active) simulation.alphaTarget(0);
-    d.fx = null; d.fy = null;
+    // Lock drag drop target cleanly back into fixed parameters
+    d.fx = d.x; d.fy = d.y;
 }
 
 import { openModalForm } from './ui.js';
@@ -337,7 +318,7 @@ function addChildDirect(parentId) {
     const parent = globalState.familyData.nodes.find(n => n.id === parentId);
     if (!parent) return;
     const newId = Date.now().toString();
-    const newNode = { id: newId, name: "ילד/ה חדש/ה", role: "ילד", isAlive: true, gender: "neutral", level: (parent.level || 0) + 1, x: parent.x, y: parent.y + 200 };
+    const newNode = { id: newId, name: "ילד/ה חדש/ה", role: "ילד", isAlive: true, gender: "neutral", level: (parent.level || 0) + 1 };
     globalState.familyData.nodes.push(newNode);
     globalState.familyData.links.push({ source: parentId, target: newId, type: "parent" });
     openModalForm(newNode);
@@ -346,7 +327,7 @@ function addParentDirect(childId) {
     const child = globalState.familyData.nodes.find(n => n.id === childId);
     if (!child) return;
     const newId = Date.now().toString();
-    const newNode = { id: newId, name: "הורה חדש/ה", role: "הורה", isAlive: true, gender: "neutral", level: Math.max(0, (child.level || 0) - 1), x: child.x, y: Math.max(50, child.y - 200) };
+    const newNode = { id: newId, name: "הורה חדש/ה", role: "הורה", isAlive: true, gender: "neutral", level: Math.max(0, (child.level || 0) - 1) };
     globalState.familyData.nodes.push(newNode);
     globalState.familyData.links.push({ source: newId, target: childId, type: "parent" });
     openModalForm(newNode);
@@ -355,7 +336,7 @@ function addSpouseDirect(partnerId) {
     const partner = globalState.familyData.nodes.find(n => n.id === partnerId);
     if (!partner) return;
     const newId = Date.now().toString();
-    const newNode = { id: newId, name: "בן/בת זוג חדש/ה", role: "בן/בת זוג", isAlive: true, gender: "neutral", level: partner.level || 0, x: partner.x - 140, y: partner.y };
+    const newNode = { id: newId, name: "בן/בת זוג חדש/ה", role: "בן/בת זוג", isAlive: true, gender: "neutral", level: partner.level || 0 };
     globalState.familyData.nodes.push(newNode);
     globalState.familyData.links.push({ source: partnerId, target: newId, type: "spouse" });
     openModalForm(newNode);
