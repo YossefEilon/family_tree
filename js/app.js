@@ -7,26 +7,25 @@ window.addEventListener('DOMContentLoaded', () => {
     initD3Graph();
     window.addEventListener('resize', resizeCanvas);
 
-    // תחילת ריצה ומשיכת נתונים
     const overlay = document.getElementById('loading-overlay');
     overlay.style.display = 'flex';
     setTimeout(() => overlay.style.opacity = '1', 10);
 
     fetchFamilyDatabase(
-        () => { // הצלחה
+        () => { 
             overlay.style.opacity = '0';
             setTimeout(() => overlay.style.display = 'none', 500);
             document.getElementById('app-container').classList.remove('opacity-0');
             updateGraphView();
         },
-        (error) => { // שגיאה
+        (error) => { 
             document.getElementById('loader-spinner').style.display = 'none';
             document.getElementById('loader-title').innerText = "שגיאת תקשורת";
             document.getElementById('loader-subtitle').innerHTML = `לא הצלחנו למשוך את המידע מגוגל שיטס.<br><br><span class="text-rose-400 text-xs">שגיאה: ${error.toString()}</span>`;
             document.getElementById('setup-instructions').classList.remove('hidden');
             lucide.createIcons();
         },
-        () => { // אין API מוגדר
+        () => { 
             document.getElementById('loader-spinner').style.display = 'none';
             document.getElementById('loader-title').innerText = "חיבור ענן לא מוגדר";
             document.getElementById('loader-subtitle').innerText = "לא נמצאה כתובת API URL מוגדרת. באפשרותך להמשיך להשתמש במידע דמו מקומי.";
@@ -35,13 +34,11 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     );
 
-    // חיבור כפתורי זום
     document.getElementById('btn-zoom-in').addEventListener('click', zoomInAction);
     document.getElementById('btn-zoom-out').addEventListener('click', zoomOutAction);
     document.getElementById('btn-zoom-reset').addEventListener('click', resetZoomAction);
     document.getElementById('btn-reset-filter').addEventListener('click', () => { globalState.filteredRootId = null; updateGraphView(); });
 
-    // כפתור דמו במסך טעינה
     document.getElementById('btn-enter-demo').addEventListener('click', () => {
         import('./config.js').then(cfg => {
             globalState.familyData = JSON.parse(JSON.stringify(cfg.demoFamilyData));
@@ -52,13 +49,11 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // כפתור הגדרות ראשי
     document.getElementById('btn-settings-trigger').addEventListener('click', () => {
         if (globalState.isAdmin) openModal('settings-menu-modal');
         else openModal('passcode-modal');
     });
 
-    // טופס קוד גישה
     document.getElementById('btn-close-passcode').addEventListener('click', closeModal);
     document.getElementById('btn-submit-passcode').addEventListener('click', () => {
         if (document.getElementById('admin-passcode-input').value === "Eilon") {
@@ -72,19 +67,16 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // תפריט עריכה פנימי
     document.getElementById('btn-switch-to-edit').addEventListener('click', () => {
         if (globalState.isAdmin) openModalForm(globalState.currentNode);
         else openModal('passcode-modal');
     });
 
-    // מאזיני סגירת מודאלים גנריים
     document.querySelectorAll('.btn-close-modal').forEach(b => b.addEventListener('click', closeModal));
     document.getElementById('modal-backdrop').addEventListener('click', closeModal);
     document.getElementById('btn-close-settings-menu').addEventListener('click', closeModal);
     document.getElementById('btn-close-confirm').addEventListener('click', closeModal);
 
-    // שמירה בענן וגיבויים
     document.getElementById('btn-cloud-save').addEventListener('click', () => { closeModal(); saveToCloud(); });
     document.getElementById('btn-logout-admin').addEventListener('click', () => {
         globalState.isAdmin = false;
@@ -104,10 +96,8 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // שינוי סטטוס חיים בטופס
     document.getElementById('edit-status').addEventListener('change', toggleDeathInputs);
 
-    // העלאת תמונה
     document.getElementById('btn-trigger-upload').addEventListener('click', () => document.getElementById('edit-pic-upload').click());
     document.getElementById('edit-pic-upload').addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -130,7 +120,6 @@ window.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     });
 
-    // כפתורי שמירה ומחיקה בטופס העריכה
     document.getElementById('btn-save-node').addEventListener('click', () => {
         const node = globalState.familyData.nodes.find(n => n.id === globalState.currentNode.id);
         if (node) {
