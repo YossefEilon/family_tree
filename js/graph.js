@@ -20,7 +20,7 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
     
-    // Physics entirely disabled to allow pure mathematical capsule grid
+    // Physics disabled to allow pure mathematical grid mapping
     simulation = d3.forceSimulation().alphaDecay(1);
 }
 
@@ -30,161 +30,148 @@ export function resizeCanvas() {
     }
 }
 
-// 1. DETERMINISTIC CAPSULE GRID ALGORITHM
-// Groups nodes into indivisible Family Units to guarantee spouses are aligned and children are centered
+// 1. DETERMINISTIC HIERARCHY & SIBLING GROUPING GRID
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
-    const units = [];
-    const nodeToUnit = new Map();
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-    // Step 1: Package spouses into indivisible Family Units
-    nodes.forEach(n => {
-        if (nodeToUnit.has(n.id)) return;
+    // Step 1: Assign exact genealogical levels using Tree Traversal (BFS)
+    // This strictly guarantees that siblings are ALWAYS on the exact same vertical level.
+    nodes.forEach(n => n.dynamicLevel = null);
+    
+    // Find absolute roots (nodes with no parents)
+    let roots = nodes.filter(n => !links.some(l => (l.type === 'parent' || !l.type) && (l.target.id || l.target) === n.id));
+    if (roots.length === 0) roots.push(nodes[0]); // Fallback for circular dependencies
+
+    let queue = roots.map(r => ({ node: r, level: 0 }));
+    
+    while (queue.length > 0) {
+        const { node, level } = queue.shift();
+        if (node.dynamicLevel !== null) continue; 
         
-        const unitNodes = new Set([n]);
-        const queue = [n];
+        node.dynamicLevel = level;
         
-        // Find all connected spouses
-        while(queue.length > 0) {
-            const current = queue.shift();
-            const spouses = links
-                .filter(l => l.type === 'spouse' && ((l.source.id || l.source) === current.id || (l.target.id || l.target) === current.id))
-                .map(l => (l.source.id || l.source) === current.id ? (l.target.id || l.target) : (l.source.id || l.source))
-                .map(id => nodes.find(x => x.id === id))
-                .filter(Boolean);
+        // Spouses must share the exact same generation level
+        const spouses = links
+            .filter(l => l.type === 'spouse' && ((l.source.id || l.source) === node.id || (l.target.id || l.target) === node.id))
+            .map(l => (l.source.id || l.source) === node.id ? (l.target.id || l.target) : (l.source.id || l.source))
+            .map(id => nodeMap.get(id))
+            .filter(n => n && n.dynamicLevel === null);
+        
+        spouses.forEach(s => queue.push({ node: s, level: level }));
+        
+        // Children are pushed exactly one level down
+        const children = links
+            .filter(l => (l.type === 'parent' || !l.type) && (l.source.id || l.source) === node.id)
+            .map(l => (l.target.id || l.target))
+            .map(id => nodeMap.get(id))
+            .filter(n => n && n.dynamicLevel === null);
             
-            spouses.forEach(sp => {
-                if (!unitNodes.has(sp)) {
-                    unitNodes.add(sp);
-                    queue.push(sp);
-                }
-            });
-        }
-
-        const unitArray = Array.from(unitNodes);
-        // Sort chronologically inside the marriage
-        unitArray.sort((a, b) => (parseInt(a.birth) || 9999) - (parseInt(b.birth) || 9999));
-        
-        const unit = {
-            id: unitArray[0].id,
-            nodes: unitArray,
-            level: 0,
-            parents: new Set(),
-            children: new Set(),
-            width: unitArray.length * 280, // 280px width allocated per person
-            centerX: 0
-        };
-
-        unitArray.forEach(un => nodeToUnit.set(un.id, unit));
-        units.push(unit);
-    });
-
-    // Step 2: Establish hierarchical connections between Family Units
-    links.forEach(l => {
-        if (l.type === 'parent' || !l.type) {
-            const parentUnit = nodeToUnit.get(l.source.id || l.source);
-            const childUnit = nodeToUnit.get(l.target.id || l.target);
-            if (parentUnit && childUnit && parentUnit !== childUnit) {
-                childUnit.parents.add(parentUnit);
-                parentUnit.children.add(childUnit);
-            }
-        }
-    });
-
-    // Step 3: Compute generation levels securely (Children are strictly Level + 1)
-    let changed = true;
-    let iterations = 0;
-    while(changed && iterations < 100) {
-        changed = false;
-        iterations++;
-        units.forEach(u => {
-            if (u.parents.size > 0) {
-                let maxParentLevel = -1;
-                u.parents.forEach(p => { if (p.level > maxParentLevel) maxParentLevel = p.level; });
-                if (u.level <= maxParentLevel) {
-                    u.level = maxParentLevel + 1;
-                    changed = true;
-                }
-            }
-        });
+        children.forEach(c => queue.push({ node: c, level: level + 1 }));
     }
 
-    // Step 4: Map the grid row by row
-    const levelsObj = {};
-    units.forEach(u => {
-        if (!levelsObj[u.level]) levelsObj[u.level] = [];
-        levelsObj[u.level].push(u);
+    // Catch any floating disconnected branches
+    nodes.forEach(n => { if (n.dynamicLevel === null) n.dynamicLevel = 0; });
+
+    // Step 2: Parse Birth Dates for left-to-right sibling sorting
+    nodes.forEach(n => {
+        if (n.birth) {
+            const match = String(n.birth).match(/\d{4}/);
+            n.computedBirth = match ? parseInt(match[0]) : 9999;
+        } else {
+            n.computedBirth = 9999;
+        }
     });
 
-    const nextAvailableX = {};
+    // Step 3: Initialize Grid Rows
+    const levels = {};
+    nodes.forEach(n => {
+        const l = n.dynamicLevel;
+        if (!levels[l]) levels[l] = [];
+        levels[l].push(n);
+    });
 
-    Object.keys(levelsObj).sort((a, b) => a - b).forEach(lvl => {
-        const rowUnits = levelsObj[lvl];
-        const currentY = lvl * 320 + 150; // Vertical spacing between generations
+    const placed = new Set();
+    const nextAvailableX = {}; // Strict anti-collision tracking
+
+    // Step 4: Map grid row by row
+    Object.keys(levels).sort((a, b) => a - b).forEach(lvl => {
+        const currentY = lvl * 280 + 150;
         if (nextAvailableX[lvl] === undefined) nextAvailableX[lvl] = 0;
 
-        // Group sibling units by their parent's coordinates to center them accurately
-        rowUnits.forEach(u => {
-            if (u.parents.size > 0) {
-                let sumX = 0;
-                u.parents.forEach(p => sumX += p.centerX);
-                u.targetX = sumX / u.parents.size; // Ideal center point based on parents
-            } else {
-                u.targetX = -1; // Independent root families
-            }
-        });
-
-        // Cluster sibling units together based on their targetX
-        const clusters = new Map();
-        rowUnits.forEach(u => {
-            const key = u.targetX;
-            if (!clusters.has(key)) clusters.set(key, []);
-            clusters.get(key).push(u);
-        });
-
-        // Place clusters onto the grid safely
-        Array.from(clusters.keys()).sort((a, b) => a - b).forEach(key => {
-            const cluster = clusters.get(key);
-            
-            // Sort siblings chronologically inside the cluster
-            cluster.sort((a, b) => {
-                const birthA = parseInt(a.nodes[0].birth) || 9999;
-                const birthB = parseInt(b.nodes[0].birth) || 9999;
-                return birthA - birthB;
-            });
-            
-            const gap = 80; // Gap between sibling family units
-            const clusterWidth = cluster.reduce((sum, u) => sum + u.width, 0) + (cluster.length - 1) * gap;
-            
-            let startX = nextAvailableX[lvl];
-            
-            // Try to center the cluster exactly under the parents, without colliding with neighbors
-            if (key !== -1) { 
-                const idealStartX = key - (clusterWidth / 2);
-                startX = Math.max(nextAvailableX[lvl], idealStartX);
-            }
-
-            // Assign exact, immutable coordinates to the nodes
-            cluster.forEach(u => {
-                u.centerX = startX + (u.width / 2);
-                
-                u.nodes.forEach((n, idx) => {
-                    n.fx = startX + (idx * 280);
-                    n.fy = currentY;
-                    n.x = n.fx;
-                    n.y = n.fy;
+        // Associate nodes with their parents' X coordinates to perfectly cluster siblings together
+        levels[lvl].forEach(n => {
+            const parentLinks = links.filter(l => (l.type === 'parent' || !l.type) && (l.target.id || l.target) === n.id);
+            if (parentLinks.length > 0) {
+                let sumX = 0; let count = 0;
+                parentLinks.forEach(pl => {
+                    const p = nodeMap.get(pl.source.id || pl.source);
+                    // Parents were mapped in the previous loop iteration (lvl - 1), so fx is available
+                    if (p && placed.has(p.id)) { sumX += p.fx; count++; }
                 });
-                
-                startX += u.width + gap;
-            });
+                n.parentX = count > 0 ? sumX / count : -1;
+            } else {
+                n.parentX = -1; // Root nodes
+            }
+        });
+
+        // Sort row: Group by ParentX (keeps siblings contiguous), then sort chronologically by age
+        levels[lvl].sort((a, b) => {
+            if (a.parentX !== b.parentX) return a.parentX - b.parentX;
+            return a.computedBirth - b.computedBirth;
+        });
+
+        // Place family blocks
+        levels[lvl].forEach(node => {
+            if (placed.has(node.id)) return;
+
+            // Gather immediate family unit (Node + Spouses)
+            const spouseLinks = links.filter(l => l.type === 'spouse' && ((l.source.id || l.source) === node.id || (l.target.id || l.target) === node.id));
+            let familyGroup = [node];
             
-            // Reserve space to prevent the next independent family group from overlapping
-            nextAvailableX[lvl] = startX + 120; 
+            spouseLinks.forEach(link => {
+                const partnerId = (link.source.id || link.source) === node.id ? (link.target.id || link.target) : (link.source.id || link.source);
+                const partner = nodeMap.get(partnerId);
+                if (partner && !placed.has(partner.id) && partner.dynamicLevel === node.dynamicLevel) {
+                    familyGroup.push(partner);
+                }
+            });
+
+            let idealX = node.parentX;
+            
+            if (idealX !== -1) {
+                // To center the ENTIRE block of siblings perfectly under the parent,
+                // we shift the FIRST sibling to the left. 
+                const siblingsCount = levels[lvl].filter(n => n.parentX === node.parentX).length;
+                const isFirstSibling = levels[lvl].find(n => n.parentX === node.parentX) === node;
+                
+                if (isFirstSibling) {
+                    // Shift left based on total siblings + their spouses width
+                    idealX = idealX - (siblingsCount * 280) / 2;
+                }
+            } else {
+                idealX = nextAvailableX[lvl];
+            }
+
+            // Anti-Collision: Cannot place node further left than the next available space
+            let startX = Math.max(nextAvailableX[lvl], idealX);
+
+            // Lock coordinates
+            familyGroup.forEach((member, index) => {
+                member.fx = startX + (index * 260); // Distance between spouses
+                member.fy = currentY;
+                member.x = member.fx;
+                member.y = member.fy;
+                placed.add(member.id);
+            });
+
+            // Mark space as occupied + buffer margin
+            nextAvailableX[lvl] = startX + (familyGroup.length * 260) + 100; 
         });
     });
 
-    // Step 5: Center the entire assembled graph structure to the screen viewport
+    // Step 5: Center entire graph to the viewport
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
     nodes.forEach(n => {
@@ -206,7 +193,7 @@ function drawOrthogonalLink(s, t, type) {
     if (type === 'spouse') {
         return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
     } else {
-        const midY = (s.y + t.y) / 2; // Clean halfway vertical drop for children
+        const midY = (s.y + t.y) / 2;
         return `M ${s.x} ${s.y + nodeHeight / 2} L ${s.x} ${midY} L ${t.x} ${midY} L ${t.x} ${t.y - nodeHeight / 2}`;
     }
 }
@@ -237,7 +224,7 @@ export function updateGraphView() {
     });
     displayLinks = displayLinks.filter(l => typeof l.source === 'object' && typeof l.target === 'object');
 
-    // Execute structural clustering before any rendering occurs
+    // Run structural geometric mapping
     calculateDeterministicGrid(displayNodes, displayLinks);
 
     const linkSelection = g.selectAll(".link").data(displayLinks, d => d.source.id + "-" + d.target.id + "-" + (d.type || 'parent'));
