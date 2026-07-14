@@ -30,7 +30,7 @@ export function resizeCanvas() {
     }
 }
 
-// 1. SPRING-RELAXATION GRID ALGORITHM (Perfect Symmetry & Balance)
+// 1. SPRING-RELAXATION GRID ALGORITHM (With Bugfix for X-Axis Explosion)
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
@@ -69,7 +69,7 @@ function calculateDeterministicGrid(nodes, links) {
             level: 0,
             parents: new Set(),
             children: new Set(),
-            width: unitArray.length * 260, // 260px keeps spouses perfectly close
+            width: unitArray.length * 260, 
             centerX: 0
         };
 
@@ -130,12 +130,11 @@ function calculateDeterministicGrid(nodes, links) {
         let currentX = 0;
         row.forEach(u => {
             u.centerX = currentX + (u.width / 2);
-            currentX += u.width + 80;
+            currentX += u.width + 120;
         });
     });
 
     // Step 5: Iterative Relaxation (The Magic Balancer)
-    // Runs 200 micro-adjustments to pull parents and children into perfect symmetrical alignment
     for (let i = 0; i < 200; i++) {
         units.forEach(u => {
             let sum = 0;
@@ -153,11 +152,14 @@ function calculateDeterministicGrid(nodes, links) {
         Object.keys(levelsObj).forEach(lvl => {
             const row = levelsObj[lvl];
             
+            // THE FIX: Re-sort the row based on current positions to stop X-Axis explosion!
+            row.sort((a, b) => a.centerX - b.centerX);
+            
             // Sweep Left to Right
             for (let j = 1; j < row.length; j++) {
                 const prev = row[j-1];
                 const curr = row[j];
-                const minGap = (prev.width / 2) + (curr.width / 2) + 60; // 60px safe margin
+                const minGap = (prev.width / 2) + (curr.width / 2) + 80;
                 if (curr.centerX - prev.centerX < minGap) {
                     curr.centerX = prev.centerX + minGap;
                 }
@@ -166,7 +168,7 @@ function calculateDeterministicGrid(nodes, links) {
             for (let j = row.length - 2; j >= 0; j--) {
                 const next = row[j+1];
                 const curr = row[j];
-                const minGap = (curr.width / 2) + (next.width / 2) + 60;
+                const minGap = (curr.width / 2) + (next.width / 2) + 80;
                 if (next.centerX - curr.centerX < minGap) {
                     curr.centerX = next.centerX - minGap;
                 }
@@ -250,6 +252,24 @@ export function updateGraphView() {
         document.getElementById('btn-reset-filter').classList.add('hidden');
     }
 
+    // THE FIX: Deduplicate links to prevent thick/overlapping messy lines
+    const uniqueLinksMap = new Map();
+    displayLinks.forEach(l => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const type = l.type || 'parent';
+        
+        // Prevent storing the same link twice
+        const key1 = `${sId}-${tId}-${type}`;
+        const key2 = `${tId}-${sId}-${type}`; // For spouses who might be linked backwards
+        
+        if (!uniqueLinksMap.has(key1) && !uniqueLinksMap.has(key2)) {
+            uniqueLinksMap.set(key1, l);
+        }
+    });
+    displayLinks = Array.from(uniqueLinksMap.values());
+
+    // Map object references
     displayLinks.forEach(link => {
         if (typeof link.source !== 'object') link.source = displayNodes.find(n => n.id === link.source) || link.source;
         if (typeof link.target !== 'object') link.target = displayNodes.find(n => n.id === link.target) || link.target;
