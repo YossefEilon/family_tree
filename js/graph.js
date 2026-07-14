@@ -20,7 +20,7 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
     
-    // Pure mathematical grid placement - physics fully disabled
+    // Physics entirely disabled to allow pure mathematical tree rendering
     simulation = d3.forceSimulation().alphaDecay(1);
 }
 
@@ -30,7 +30,7 @@ export function resizeCanvas() {
     }
 }
 
-// 1. DETERMINISTIC BILATERAL BALANCING ALGORITHM
+// 1. SPRING-RELAXATION GRID ALGORITHM (Perfect Symmetry & Balance)
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
@@ -69,9 +69,8 @@ function calculateDeterministicGrid(nodes, links) {
             level: 0,
             parents: new Set(),
             children: new Set(),
-            width: unitArray.length * 260, 
-            centerX: 0,
-            descendantCount: 0
+            width: unitArray.length * 260, // 260px keeps spouses perfectly close
+            centerX: 0
         };
 
         unitArray.forEach(un => nodeToUnit.set(un.id, unit));
@@ -90,7 +89,7 @@ function calculateDeterministicGrid(nodes, links) {
         }
     });
 
-    // Step 3: Compute generation levels securely (Children = max parent level + 1)
+    // Step 3: Compute generation levels (Top-Down with relaxation)
     let changed = true;
     let iterations = 0;
     while(changed && iterations < 100) {
@@ -98,105 +97,97 @@ function calculateDeterministicGrid(nodes, links) {
         iterations++;
         units.forEach(u => {
             if (u.parents.size > 0) {
-                let maxParentLevel = -1;
-                u.parents.forEach(p => { if (p.level > maxParentLevel) maxParentLevel = p.level; });
-                if (u.level <= maxParentLevel) {
-                    u.level = maxParentLevel + 1;
+                let maxLvl = -1;
+                u.parents.forEach(p => { if (p.level > maxLvl) maxLvl = p.level; });
+                if (u.level <= maxLvl) {
+                    u.level = maxLvl + 1;
                     changed = true;
                 }
             }
         });
     }
 
-    // NEW CRITICAL FIX: Calculate total weight/descendant tree size for every unit
-    // This allows us to instantly separate main family branches from incoming in-laws.
-    units.forEach(u => {
-        u.descendantCount = 0;
-        const visited = new Set();
-        function countDescendants(unit) {
-            unit.children.forEach(c => {
-                if (!visited.has(c.id)) {
-                    visited.add(c.id);
-                    u.descendantCount += c.nodes.length;
-                    countDescendants(c);
-                }
-            });
-        }
-        countDescendants(u);
-    });
-
-    // Step 4: Map rows with 3-Pass Symmetrical Alignment
+    // Step 4: Initial Sorting to prevent crossed lines
     const levelsObj = {};
     units.forEach(u => {
         if (!levelsObj[u.level]) levelsObj[u.level] = [];
         levelsObj[u.level].push(u);
     });
 
-    const nextAvailableX = {};
+    Object.keys(levelsObj).sort((a,b) => a-b).forEach(lvl => {
+        let row = levelsObj[lvl];
+        if (parseInt(lvl) === 0) {
+            row.sort((a, b) => (parseInt(a.nodes[0].birth) || 9999) - (parseInt(b.nodes[0].birth) || 9999));
+        } else {
+            row.forEach(u => {
+                let pSum = 0;
+                u.parents.forEach(p => pSum += p.centerX);
+                u.sortVal = u.parents.size > 0 ? (pSum / u.parents.size) : (parseInt(u.nodes[0].birth) || 9999);
+            });
+            row.sort((a, b) => a.sortVal - b.sortVal);
+        }
+        
+        let currentX = 0;
+        row.forEach(u => {
+            u.centerX = currentX + (u.width / 2);
+            currentX += u.width + 80;
+        });
+    });
 
-    Object.keys(levelsObj).sort((a, b) => a - b).forEach(lvl => {
-        const rowUnits = levelsObj[lvl];
-        const currentY = lvl * 320 + 150; 
-        if (nextAvailableX[lvl] === undefined) nextAvailableX[lvl] = 0;
-
-        // Pass 1: Calculate target positions (Main bloodlines first, In-laws anchor symmetrically to their right)
-        rowUnits.sort((a, b) => b.descendantCount - a.descendantCount);
-        rowUnits.forEach(u => {
-            if (u.parents.size > 0) {
-                // Descendants settle smoothly under the center of their parents
-                let sumX = 0;
-                u.parents.forEach(p => sumX += p.centerX);
-                u.targetX = sumX / u.parents.size;
-            } else {
-                // Roots look at their children to find the primary line they married into
-                let partnerCenterX = -1;
-                u.children.forEach(c => {
-                    c.parents.forEach(p => {
-                        if (p !== u && p.centerX !== undefined) {
-                            partnerCenterX = p.centerX;
-                        }
-                    });
-                });
-                
-                if (partnerCenterX !== -1) {
-                    // THE FIX: Securely push the right-side in-law parents further right of the main family block
-                    u.targetX = partnerCenterX + 340; 
-                } else {
-                    u.targetX = nextAvailableX[lvl];
-                }
+    // Step 5: Iterative Relaxation (The Magic Balancer)
+    // Runs 200 micro-adjustments to pull parents and children into perfect symmetrical alignment
+    for (let i = 0; i < 200; i++) {
+        units.forEach(u => {
+            let sum = 0;
+            let count = 0;
+            u.parents.forEach(p => { sum += p.centerX; count++; });
+            u.children.forEach(c => { sum += c.centerX; count++; });
+            
+            if (count > 0) {
+                let idealX = sum / count;
+                u.centerX += (idealX - u.centerX) * 0.15; // Smooth spring pull
             }
         });
 
-        // Pass 2: Sort the row strictly from left to right by their intended targetX
-        rowUnits.sort((a, b) => a.targetX - b.targetX);
-
-        // Pass 3: Grid Packer with Bounding-Box collision check
-        let startX = nextAvailableX[lvl];
-        rowUnits.forEach(u => {
-            let idealStartX = u.targetX - (u.width / 2);
-            let finalStartX = Math.max(startX, idealStartX);
-
-            u.centerX = finalStartX + (u.width / 2);
+        // Resolve Overlaps (Bumper system)
+        Object.keys(levelsObj).forEach(lvl => {
+            const row = levelsObj[lvl];
             
-            u.nodes.forEach((n, idx) => {
-                n.fx = finalStartX + (idx * 260);
-                n.fy = currentY;
-                n.x = n.fx;
-                n.y = n.fy;
-            });
-            
-            startX = finalStartX + u.width + 80; // Secure spacing buffer between unrelated blocks
+            // Sweep Left to Right
+            for (let j = 1; j < row.length; j++) {
+                const prev = row[j-1];
+                const curr = row[j];
+                const minGap = (prev.width / 2) + (curr.width / 2) + 60; // 60px safe margin
+                if (curr.centerX - prev.centerX < minGap) {
+                    curr.centerX = prev.centerX + minGap;
+                }
+            }
+            // Sweep Right to Left to equalize the push
+            for (let j = row.length - 2; j >= 0; j--) {
+                const next = row[j+1];
+                const curr = row[j];
+                const minGap = (curr.width / 2) + (next.width / 2) + 60;
+                if (next.centerX - curr.centerX < minGap) {
+                    curr.centerX = next.centerX - minGap;
+                }
+            }
         });
-        
-        nextAvailableX[lvl] = startX;
-    });
+    }
 
-    // Step 5: Center the entire graph on screen
+    // Step 6: Apply exact calculated coordinates & Center entire graph
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
-    nodes.forEach(n => {
-        if (n.x < globalMinX) globalMinX = n.x;
-        if (n.x > globalMaxX) globalMaxX = n.x;
+
+    units.forEach(u => {
+        u.nodes.forEach((n, idx) => {
+            n.fx = u.centerX - ((u.nodes.length - 1) * 260) / 2 + (idx * 260);
+            n.fy = u.level * 320 + 150;
+            n.x = n.fx;
+            n.y = n.fy;
+
+            if (n.x < globalMinX) globalMinX = n.x;
+            if (n.x > globalMaxX) globalMaxX = n.x;
+        });
     });
 
     const graphWidth = globalMaxX - globalMinX;
@@ -383,7 +374,7 @@ export function getSpouseIds(nodeId) {
             const s = typeof l.source === 'object' ? l.source.id : l.source;
             const t = typeof l.target === 'object' ? l.target.id : l.target;
             if (s === nodeId) spouses.add(t);
-            if (t === spouses) spouses.add(s);
+            if (t === nodeId) spouses.add(s);
         }
     });
     return spouses;
