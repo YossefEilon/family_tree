@@ -30,7 +30,7 @@ export function resizeCanvas() {
     }
 }
 
-// 1. COMPACT RECURSIVE TREE-WIDTH ALGORITHM (With Secondary Parent Targeting)
+// 1. COMPACT RECURSIVE TREE-WIDTH ALGORITHM (With Strict Bounding-Box Collision)
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
@@ -76,9 +76,9 @@ function calculateDeterministicGrid(nodes, links) {
             nodes: unitArray,
             level: 0,
             childrenUnits: [],
-            parentUnits: [], // Now supports multiple parent lines
+            parentUnits: [],
             primaryParentUnit: null,
-            bioParentsMap: new Map(), // Tracks which node in the unit is the specific child
+            bioParentsMap: new Map(),
             width: unitArray.length * 260,
             treeWidth: 0,
             xAssigned: false
@@ -130,7 +130,6 @@ function calculateDeterministicGrid(nodes, links) {
 
     // Step 4: Calculate Sub-Tree Widths (Bottom-Up)
     function calcTreeWidth(u) {
-        // Only propagate width through primary parent paths to prevent doubling
         const primaryChildren = u.childrenUnits.filter(c => c.primaryParentUnit === u);
         if (primaryChildren.length === 0) {
             u.treeWidth = u.width;
@@ -182,7 +181,7 @@ function calculateDeterministicGrid(nodes, links) {
         currentX += r.treeWidth + 120;
     });
 
-    // Secondary Pass: Place "In-Law" / Extra parents DIRECTLY above their children
+    // Secondary Pass: Place "In-Law" / Extra parents DIRECTLY above their children using Bounding Box Anti-Collision
     const secondaryRoots = absoluteRoots.filter(r => !r.xAssigned);
     
     secondaryRoots.forEach(r => {
@@ -190,37 +189,50 @@ function calculateDeterministicGrid(nodes, links) {
         const placedChild = r.childrenUnits.find(c => c.xAssigned);
         
         if (placedChild) {
-            // Find the specific node in the child unit to align perfectly
             const bioChildId = placedChild.bioParentsMap.get(r.id);
             const bioChildNode = placedChild.nodes.find(n => n.id === bioChildId);
             
             let targetX = placedChild.centerX;
             if (bioChildNode) targetX = bioChildNode.x;
 
-            // Anti-Collision Check: If the other parent is already directly above, shift this parent sideways
-            let offset = 0;
-            let collisionDetected = true;
-            let attempts = 0;
-            
-            while(collisionDetected && attempts < 20) {
-                collisionDetected = false;
-                for (let n of nodes) {
-                    // If a node exists on the same vertical level and close horizontally
-                    if (n.x !== undefined && n.fy === r.level * 320 + 150) {
-                        if (Math.abs(n.x - (targetX + offset)) < 150) {
-                            collisionDetected = true;
-                            break;
-                        }
+            // Strict Physical Bounding Box Collision Detection
+            let occupied = [];
+            units.filter(u => u.xAssigned && u.level === r.level).forEach(u => {
+                occupied.push({
+                    min: u.centerX - (u.width / 2) - 40, // 40px minimum safety gap
+                    max: u.centerX + (u.width / 2) + 40
+                });
+            });
+
+            // Generate precise mathematical candidate points (Edges of existing boxes)
+            let candidates = [targetX];
+            occupied.forEach(occ => {
+                candidates.push(occ.min - (r.width / 2) - 40);
+                candidates.push(occ.max + (r.width / 2) + 40);
+            });
+
+            // Sort candidates to find the closest available spot to the ideal targetX
+            candidates.sort((a, b) => Math.abs(a - targetX) - Math.abs(b - targetX));
+
+            let bestX = targetX;
+            for (let cx of candidates) {
+                let cMin = cx - (r.width / 2);
+                let cMax = cx + (r.width / 2);
+                let isClear = true;
+                for (let occ of occupied) {
+                    // Check intersection
+                    if (cMax > occ.min && cMin < occ.max) {
+                        isClear = false;
+                        break;
                     }
                 }
-                if (collisionDetected) {
-                    // Zig-zag offset: -260, +260, -520, +520...
-                    offset = offset >= 0 ? -offset - 260 : -offset + 260;
+                if (isClear) {
+                    bestX = cx;
+                    break;
                 }
-                attempts++;
             }
 
-            // Assign Center X relative to the biological child
+            // Assign placement based on the mathematically cleared bestX
             function assignFromCenterX(u, targetCenterX) {
                 if (u.xAssigned) return;
                 u.centerX = targetCenterX;
@@ -232,7 +244,6 @@ function calculateDeterministicGrid(nodes, links) {
                 });
                 u.xAssigned = true;
                 
-                // If this secondary parent has its own primary children, layout from this new anchor
                 const primaryChildren = u.childrenUnits.filter(c => c.primaryParentUnit === u);
                 if (primaryChildren.length > 0) {
                     primaryChildren.sort((a,b) => (parseInt(a.nodes[0].birth)||9999) - (parseInt(b.nodes[0].birth)||9999));
@@ -246,7 +257,7 @@ function calculateDeterministicGrid(nodes, links) {
                 }
             }
             
-            assignFromCenterX(r, targetX + offset);
+            assignFromCenterX(r, bestX);
             
         } else {
             // Failsafe
