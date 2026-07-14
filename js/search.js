@@ -50,7 +50,9 @@ export function initSearch() {
 
             // Handle user selection
             li.addEventListener('click', () => {
-                searchInput.value = node.name;
+                // איפוס התיבה והעלמת התוצאות
+                searchInput.value = '';
+                searchInput.blur(); // סוגר את המקלדת בנייד
                 searchResults.classList.add('hidden');
                 
                 // Trigger camera focus and open details modal
