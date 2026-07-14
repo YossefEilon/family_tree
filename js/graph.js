@@ -535,3 +535,48 @@ function addSpouseDirect(partnerId) {
     globalState.familyData.links.push({ source: partnerId, target: newId, type: "spouse" });
     openModalForm(newNode);
 }
+/**
+ * Pans and zooms the D3 canvas to center on a specific node,
+ * while dimming all other nodes to create a visual focus effect.
+ */
+export function focusNode(nodeId) {
+    const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
+    if (!nodeData || typeof nodeData.x === 'undefined' || typeof nodeData.y === 'undefined') return;
+
+    // Center coordinates
+    const canvas = document.getElementById('tree-canvas');
+    const width = canvas.clientWidth || window.innerWidth;
+    const height = canvas.clientHeight || window.innerHeight;
+    
+    // Calculate transform to center the node
+    const scale = 1.2;
+    const transform = d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale)
+        .translate(-nodeData.x, -nodeData.y);
+
+    // Animate camera pan & zoom
+    // Note: ensure 'zoom' is the d3.zoom() behavior variable in this module.
+    d3.select('#tree-canvas').transition()
+        .duration(1000)
+        .call(zoom.transform, transform);
+
+    // Apply visual focus (dim others, highlight target)
+    d3.selectAll('.node-group')
+        .transition().duration(500)
+        .style('opacity', d => d.id === nodeId ? 1 : 0.15);
+        
+    d3.selectAll('.link-path')
+        .transition().duration(500)
+        .style('opacity', 0.1);
+
+    // Listen for background clicks to clear the focus
+    d3.select('#tree-canvas').on('click.focusClear', () => {
+        // Restore opacity to all nodes and links
+        d3.selectAll('.node-group').transition().duration(500).style('opacity', 1);
+        d3.selectAll('.link-path').transition().duration(500).style('opacity', 1);
+        // Remove this specific click listener
+        d3.select('#tree-canvas').on('click.focusClear', null);
+    });
+}
+
