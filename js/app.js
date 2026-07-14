@@ -2,6 +2,7 @@ import { globalState } from './config.js';
 import { fetchFamilyDatabase, saveToCloud } from './api.js';
 import { initD3Graph, updateGraphView, resizeCanvas, zoomInAction, zoomOutAction, resetZoomAction, clearHighlights } from './graph.js';
 import { openModal, closeModal, openModalForm, toggleDeathInputs, showToast, showConfirm } from './ui.js';
+import { initSearch } from './search.js'; // <-- ייבוא מודול החיפוש
 
 window.addEventListener('DOMContentLoaded', () => {
     initD3Graph();
@@ -17,6 +18,7 @@ window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => overlay.style.display = 'none', 500);
             document.getElementById('app-container').classList.remove('opacity-0');
             updateGraphView();
+            initSearch(); // <-- הפעלת מנגנון החיפוש לאחר טעינת הנתונים
         },
         (error) => { 
             document.getElementById('loader-spinner').style.display = 'none';
@@ -46,6 +48,7 @@ window.addEventListener('DOMContentLoaded', () => {
             overlay.style.opacity = '0';
             setTimeout(() => overlay.style.display = 'none', 500);
             updateGraphView();
+            initSearch(); // <-- הפעלת מנגנון החיפוש גם במצב דמו
         });
     });
 
