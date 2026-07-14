@@ -20,7 +20,7 @@ export function initD3Graph() {
     svg.call(zoom);
     resizeCanvas();
     
-    // Physics entirely disabled to allow pure mathematical tree rendering
+    // Pure mathematical grid placement - physics fully disabled
     simulation = d3.forceSimulation().alphaDecay(1);
 }
 
@@ -30,7 +30,7 @@ export function resizeCanvas() {
     }
 }
 
-// 1. COMPACT RECURSIVE TREE-WIDTH ALGORITHM (With Strict Bounding-Box Collision)
+// 1. DETERMINISTIC BILATERAL BALANCING ALGORITHM
 function calculateDeterministicGrid(nodes, links) {
     if (!nodes || nodes.length === 0) return;
 
@@ -61,218 +61,137 @@ function calculateDeterministicGrid(nodes, links) {
         }
 
         const unitArray = Array.from(unitNodes);
-        
-        // Ensure blood relative is placed first for aesthetic alignment
-        unitArray.sort((a, b) => {
-            const aIsBlood = links.some(l => (l.type === 'parent' || !l.type) && (l.target.id === a.id || l.target === a.id));
-            const bIsBlood = links.some(l => (l.type === 'parent' || !l.type) && (l.target.id === b.id || l.target === b.id));
-            if (aIsBlood && !bIsBlood) return -1;
-            if (!aIsBlood && bIsBlood) return 1;
-            return (parseInt(a.birth) || 9999) - (parseInt(b.birth) || 9999);
-        });
+        unitArray.sort((a, b) => (parseInt(a.birth) || 9999) - (parseInt(b.birth) || 9999));
         
         const unit = {
             id: unitArray[0].id,
             nodes: unitArray,
             level: 0,
-            childrenUnits: [],
-            parentUnits: [],
-            primaryParentUnit: null,
-            bioParentsMap: new Map(),
-            width: unitArray.length * 260,
-            treeWidth: 0,
-            xAssigned: false
+            parents: new Set(),
+            children: new Set(),
+            width: unitArray.length * 260, 
+            centerX: 0,
+            descendantCount: 0
         };
 
         unitArray.forEach(un => nodeToUnit.set(un.id, unit));
         units.push(unit);
     });
 
-    // Step 2: Build Strict Parent-Child Unit Relationships
+    // Step 2: Establish hierarchical connections between Family Units
     links.forEach(l => {
         if (l.type === 'parent' || !l.type) {
             const parentUnit = nodeToUnit.get(l.source.id || l.source);
             const childUnit = nodeToUnit.get(l.target.id || l.target);
             if (parentUnit && childUnit && parentUnit !== childUnit) {
-                if (!childUnit.primaryParentUnit) { 
-                    childUnit.primaryParentUnit = parentUnit;
-                }
-                if (!childUnit.parentUnits.includes(parentUnit)) {
-                    childUnit.parentUnits.push(parentUnit);
-                    parentUnit.childrenUnits.push(childUnit);
-                }
-                // Map the exact biological connection
-                childUnit.bioParentsMap.set(parentUnit.id, l.target.id || l.target);
+                childUnit.parents.add(parentUnit);
+                parentUnit.children.add(childUnit);
             }
         }
     });
 
-    const absoluteRoots = units.filter(u => u.parentUnits.length === 0);
-
-    // Step 3: Assign Generation Levels (Top-Down with Relaxation)
-    absoluteRoots.forEach(r => r.level = 0);
+    // Step 3: Compute generation levels securely (Children = max parent level + 1)
     let changed = true;
     let iterations = 0;
     while(changed && iterations < 100) {
         changed = false;
         iterations++;
         units.forEach(u => {
-            if (u.parentUnits.length > 0) {
-                let maxLvl = -1;
-                u.parentUnits.forEach(p => { if (p.level > maxLvl) maxLvl = p.level; });
-                if (u.level <= maxLvl) {
-                    u.level = maxLvl + 1;
+            if (u.parents.size > 0) {
+                let maxParentLevel = -1;
+                u.parents.forEach(p => { if (p.level > maxParentLevel) maxParentLevel = p.level; });
+                if (u.level <= maxParentLevel) {
+                    u.level = maxParentLevel + 1;
                     changed = true;
                 }
             }
         });
     }
 
-    // Step 4: Calculate Sub-Tree Widths (Bottom-Up)
-    function calcTreeWidth(u) {
-        const primaryChildren = u.childrenUnits.filter(c => c.primaryParentUnit === u);
-        if (primaryChildren.length === 0) {
-            u.treeWidth = u.width;
-        } else {
-            primaryChildren.forEach(c => calcTreeWidth(c));
-            const minGap = 40;
-            const totalChildrenWidth = primaryChildren.reduce((sum, c) => sum + c.treeWidth, 0) + (primaryChildren.length - 1) * minGap;
-            u.treeWidth = Math.max(u.width, totalChildrenWidth);
-        }
-    }
-    absoluteRoots.forEach(r => calcTreeWidth(r));
-
-    // Step 5: Assign X Coordinates (Top-Down)
-    function assignCenterX(u, startX) {
-        if (u.xAssigned) return;
-
-        u.centerX = startX + u.treeWidth / 2;
-        
-        u.nodes.forEach((n, idx) => {
-            n.fx = u.centerX - ((u.nodes.length - 1) * 260) / 2 + (idx * 260);
-            n.fy = u.level * 320 + 150;
-            n.x = n.fx;
-            n.y = n.fy;
-        });
-        u.xAssigned = true;
-        
-        const primaryChildren = u.childrenUnits.filter(c => c.primaryParentUnit === u);
-        if (primaryChildren.length > 0) {
-            primaryChildren.sort((a,b) => (parseInt(a.nodes[0].birth)||9999) - (parseInt(b.nodes[0].birth)||9999));
-            
-            const minGap = 40;
-            const totalChildrenWidth = primaryChildren.reduce((sum, c) => sum + c.treeWidth, 0) + (primaryChildren.length - 1) * minGap;
-            
-            let currentChildStartX = u.centerX - (totalChildrenWidth / 2);
-            
-            primaryChildren.forEach((c) => {
-                assignCenterX(c, currentChildStartX);
-                currentChildStartX += c.treeWidth + minGap;
+    // NEW CRITICAL FIX: Calculate total weight/descendant tree size for every unit
+    // This allows us to instantly separate main family branches from incoming in-laws.
+    units.forEach(u => {
+        u.descendantCount = 0;
+        const visited = new Set();
+        function countDescendants(unit) {
+            unit.children.forEach(c => {
+                if (!visited.has(c.id)) {
+                    visited.add(c.id);
+                    u.descendantCount += c.nodes.length;
+                    countDescendants(c);
+                }
             });
         }
-    }
-
-    // First Pass: Place primary roots (Roots that control child placement)
-    let currentX = 0;
-    const primaryRoots = absoluteRoots.filter(r => r.childrenUnits.length === 0 || r.childrenUnits.some(c => c.primaryParentUnit === r));
-    
-    primaryRoots.forEach(r => {
-        assignCenterX(r, currentX);
-        currentX += r.treeWidth + 120;
+        countDescendants(u);
     });
 
-    // Secondary Pass: Place "In-Law" / Extra parents DIRECTLY above their children using Bounding Box Anti-Collision
-    const secondaryRoots = absoluteRoots.filter(r => !r.xAssigned);
-    
-    secondaryRoots.forEach(r => {
-        // Find a child unit that is already placed
-        const placedChild = r.childrenUnits.find(c => c.xAssigned);
-        
-        if (placedChild) {
-            const bioChildId = placedChild.bioParentsMap.get(r.id);
-            const bioChildNode = placedChild.nodes.find(n => n.id === bioChildId);
-            
-            let targetX = placedChild.centerX;
-            if (bioChildNode) targetX = bioChildNode.x;
+    // Step 4: Map rows with 3-Pass Symmetrical Alignment
+    const levelsObj = {};
+    units.forEach(u => {
+        if (!levelsObj[u.level]) levelsObj[u.level] = [];
+        levelsObj[u.level].push(u);
+    });
 
-            // Strict Physical Bounding Box Collision Detection
-            let occupied = [];
-            units.filter(u => u.xAssigned && u.level === r.level).forEach(u => {
-                occupied.push({
-                    min: u.centerX - (u.width / 2) - 40, // 40px minimum safety gap
-                    max: u.centerX + (u.width / 2) + 40
-                });
-            });
+    const nextAvailableX = {};
 
-            // Generate precise mathematical candidate points (Edges of existing boxes)
-            let candidates = [targetX];
-            occupied.forEach(occ => {
-                candidates.push(occ.min - (r.width / 2) - 40);
-                candidates.push(occ.max + (r.width / 2) + 40);
-            });
+    Object.keys(levelsObj).sort((a, b) => a - b).forEach(lvl => {
+        const rowUnits = levelsObj[lvl];
+        const currentY = lvl * 320 + 150; 
+        if (nextAvailableX[lvl] === undefined) nextAvailableX[lvl] = 0;
 
-            // Sort candidates to find the closest available spot to the ideal targetX
-            candidates.sort((a, b) => Math.abs(a - targetX) - Math.abs(b - targetX));
-
-            let bestX = targetX;
-            for (let cx of candidates) {
-                let cMin = cx - (r.width / 2);
-                let cMax = cx + (r.width / 2);
-                let isClear = true;
-                for (let occ of occupied) {
-                    // Check intersection
-                    if (cMax > occ.min && cMin < occ.max) {
-                        isClear = false;
-                        break;
-                    }
-                }
-                if (isClear) {
-                    bestX = cx;
-                    break;
-                }
-            }
-
-            // Assign placement based on the mathematically cleared bestX
-            function assignFromCenterX(u, targetCenterX) {
-                if (u.xAssigned) return;
-                u.centerX = targetCenterX;
-                u.nodes.forEach((n, idx) => {
-                    n.fx = u.centerX - ((u.nodes.length - 1) * 260) / 2 + (idx * 260);
-                    n.fy = u.level * 320 + 150;
-                    n.x = n.fx;
-                    n.y = n.fy;
-                });
-                u.xAssigned = true;
-                
-                const primaryChildren = u.childrenUnits.filter(c => c.primaryParentUnit === u);
-                if (primaryChildren.length > 0) {
-                    primaryChildren.sort((a,b) => (parseInt(a.nodes[0].birth)||9999) - (parseInt(b.nodes[0].birth)||9999));
-                    const minGap = 40;
-                    const totalChildrenWidth = primaryChildren.reduce((sum, c) => sum + c.treeWidth, 0) + (primaryChildren.length - 1) * minGap;
-                    let currentChildStartX = u.centerX - (totalChildrenWidth / 2);
-                    primaryChildren.forEach((c) => {
-                        assignCenterX(c, currentChildStartX);
-                        currentChildStartX += c.treeWidth + minGap;
+        // Pass 1: Calculate target positions (Main bloodlines first, In-laws anchor symmetrically to their right)
+        rowUnits.sort((a, b) => b.descendantCount - a.descendantCount);
+        rowUnits.forEach(u => {
+            if (u.parents.size > 0) {
+                // Descendants settle smoothly under the center of their parents
+                let sumX = 0;
+                u.parents.forEach(p => sumX += p.centerX);
+                u.targetX = sumX / u.parents.size;
+            } else {
+                // Roots look at their children to find the primary line they married into
+                let partnerCenterX = -1;
+                u.children.forEach(c => {
+                    c.parents.forEach(p => {
+                        if (p !== u && p.centerX !== undefined) {
+                            partnerCenterX = p.centerX;
+                        }
                     });
+                });
+                
+                if (partnerCenterX !== -1) {
+                    // THE FIX: Securely push the right-side in-law parents further right of the main family block
+                    u.targetX = partnerCenterX + 340; 
+                } else {
+                    u.targetX = nextAvailableX[lvl];
                 }
             }
+        });
+
+        // Pass 2: Sort the row strictly from left to right by their intended targetX
+        rowUnits.sort((a, b) => a.targetX - b.targetX);
+
+        // Pass 3: Grid Packer with Bounding-Box collision check
+        let startX = nextAvailableX[lvl];
+        rowUnits.forEach(u => {
+            let idealStartX = u.targetX - (u.width / 2);
+            let finalStartX = Math.max(startX, idealStartX);
+
+            u.centerX = finalStartX + (u.width / 2);
             
-            assignFromCenterX(r, bestX);
+            u.nodes.forEach((n, idx) => {
+                n.fx = finalStartX + (idx * 260);
+                n.fy = currentY;
+                n.x = n.fx;
+                n.y = n.fy;
+            });
             
-        } else {
-            // Failsafe
-            assignCenterX(r, currentX);
-            currentX += r.treeWidth + 120;
-        }
+            startX = finalStartX + u.width + 80; // Secure spacing buffer between unrelated blocks
+        });
+        
+        nextAvailableX[lvl] = startX;
     });
 
-    // Final Failsafe
-    units.filter(u => !u.xAssigned).forEach(u => {
-        assignCenterX(u, currentX);
-        currentX += u.treeWidth + 120;
-    });
-
-    // Step 6: Center the entire assembled graph to the screen viewport
+    // Step 5: Center the entire graph on screen
     let globalMinX = Infinity;
     let globalMaxX = -Infinity;
     nodes.forEach(n => {
@@ -464,7 +383,7 @@ export function getSpouseIds(nodeId) {
             const s = typeof l.source === 'object' ? l.source.id : l.source;
             const t = typeof l.target === 'object' ? l.target.id : l.target;
             if (s === nodeId) spouses.add(t);
-            if (t === nodeId) spouses.add(s);
+            if (t === spouses) spouses.add(s);
         }
     });
     return spouses;
