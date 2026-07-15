@@ -69,7 +69,7 @@ export function createNodeCard(data) {
     }
 
     let dateHtml = data.isAlive 
-        ? `<div class="truncate">${data.birth ? `${bornText}:${data.birth}` : 'שנת לידה לא ידועה'}</div>` + (data.hebrewBirthDate ? (isBirthdayMonth ? `<div class="text-indigo-600 font-bold bg-indigo-50 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-0.5 text-[10px] w-max"><i data-lucide="cake" class="w-3 h-3"></i> ${celebrateText} ב${currentHebMonth}!</div>` : `<div class="text-slate-400 text-[10px] mt-0.5 truncate">${data.hebrewBirthDate}</div>`) : '')
+        ? `<div class="truncate">${data.birth ? `${bornText}: ${data.birth}` : 'שנת לידה לא ידועה'}</div>` + (data.hebrewBirthDate ? (isBirthdayMonth ? `<div class="text-indigo-600 font-bold bg-indigo-50 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-0.5 text-[10px] w-max"><i data-lucide="cake" class="w-3 h-3"></i> ${celebrateText} ב${currentHebMonth}!</div>` : `<div class="text-slate-400 text-[10px] mt-0.5 truncate">${data.hebrewBirthDate}</div>`) : '')
         : `<div class="truncate text-slate-600 font-semibold mt-0.5">${data.birth || '?'} - ${data.death || '?'}</div>` + (data.hebrewDeathDate ? `<div class="text-slate-400 text-[10px] mt-0.5 truncate">פטירה: ${data.hebrewDeathDate}</div>` : '');
 
     const accent = data.gender === 'male' ? 'bg-blue-400' : (data.gender === 'female' ? 'bg-rose-400' : 'bg-slate-400');
@@ -98,58 +98,58 @@ export function createActionBubbles() {
         return `
             <div style="direction: ltr;" class="relative w-full h-full pointer-events-none">
                 <svg class="absolute top-0 left-0 w-full h-full overflow-visible pointer-events-none -z-10">
-                    <path d="M 220 120 L 220 40" stroke="#6366f1" stroke-dasharray="3,3" stroke-width="2" fill="none" />
-                    <path d="M 220 120 L 220 200" stroke="#10b981" stroke-dasharray="3,3" stroke-width="2" fill="none" />
-                    <path d="M 220 120 L 60 120" stroke="#f43f5e" stroke-dasharray="3,3" stroke-width="2" fill="none" />
-                    <path d="M 220 120 C 300 120, 300 85, 345 85" stroke="#94a3b8" stroke-width="1.5" fill="none" />
-                    <path d="M 220 120 C 300 120, 300 155, 345 155" stroke="#94a3b8" stroke-width="1.5" fill="none" />
+                    <path d="M 300 200 L 300 110" stroke="#6366f1" stroke-dasharray="3,3" stroke-width="2" fill="none" />
+                    <path d="M 300 200 L 300 290" stroke="#10b981" stroke-dasharray="3,3" stroke-width="2" fill="none" />
+                    <path d="M 300 200 L 140 200" stroke="#f43f5e" stroke-dasharray="3,3" stroke-width="2" fill="none" />
+                    <path d="M 300 200 C 390 200, 390 155, 460 155" stroke="#94a3b8" stroke-width="1.5" fill="none" />
+                    <path d="M 300 200 C 390 200, 390 245, 460 245" stroke="#94a3b8" stroke-width="1.5" fill="none" />
                 </svg>
-                <div class="action-btn-add-parent absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 220px; top: 25px; transform: translate(-50%, -50%);">
+                <div class="action-btn-add-parent absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 300px; top: 100px; transform: translate(-50%, -50%);">
                     <button class="px-3 py-1.5 rounded-full bg-indigo-600 text-white flex items-center gap-1.5 text-xs font-bold shadow-md hover:bg-indigo-700 transition-all transform hover:scale-105">
-                        <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i><span>הוסף הורה</span>
+                        <i data-lucide="arrow-up" class="w-3.5 h-3.5 pointer-events-none"></i><span class="pointer-events-none">הוסף הורה</span>
                     </button>
                 </div>
-                <div class="action-btn-add-child absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 220px; top: 215px; transform: translate(-50%, -50%);">
+                <div class="action-btn-add-child absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 300px; top: 300px; transform: translate(-50%, -50%);">
                     <button class="px-3 py-1.5 rounded-full bg-emerald-600 text-white flex items-center gap-1.5 text-xs font-bold shadow-md hover:bg-emerald-700 transition-all transform hover:scale-105">
-                        <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i><span>הוסף ילד</span>
+                        <i data-lucide="arrow-down" class="w-3.5 h-3.5 pointer-events-none"></i><span class="pointer-events-none">הוסף ילד</span>
                     </button>
                 </div>
-                <div class="action-btn-add-spouse absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 45px; top: 120px; transform: translate(-50%, -50%);">
+                <div class="action-btn-add-spouse absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 130px; top: 200px; transform: translate(-50%, -50%);">
                     <button class="px-3 py-1.5 rounded-full bg-rose-500 text-white flex items-center gap-1.5 text-xs font-bold shadow-md hover:bg-rose-600 transition-all transform hover:scale-105">
-                        <i data-lucide="heart" class="w-3.5 h-3.5"></i><span>בן זוג</span>
+                        <i data-lucide="heart" class="w-3.5 h-3.5 pointer-events-none"></i><span class="pointer-events-none">בן זוג</span>
                     </button>
                 </div>
-                <div class="action-btn-details absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 380px; top: 85px; transform: translate(-50%, -50%);">
+                <div class="action-btn-details absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 470px; top: 155px; transform: translate(-50%, -50%);">
                     <button class="w-9 h-9 rounded-full bg-white border-2 border-indigo-500 text-indigo-600 flex items-center justify-center hover:bg-indigo-50 shadow-md transform hover:scale-105">
-                        <i data-lucide="info" class="w-4 h-4"></i>
+                        <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
                     </button>
-                    <span class="ml-1.5 text-xs font-bold text-slate-700 bg-white/90 px-1.5 py-0.5 rounded shadow-sm">פרטים</span>
+                    <span class="ml-1.5 text-xs font-bold text-slate-700 bg-white/90 px-1.5 py-0.5 rounded shadow-sm pointer-events-none">פרטים</span>
                 </div>
-                <div class="action-btn-family absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 380px; top: 155px; transform: translate(-50%, -50%);">
+                <div class="action-btn-family absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 470px; top: 245px; transform: translate(-50%, -50%);">
                     <button class="w-9 h-9 rounded-full bg-white border-2 border-emerald-500 text-emerald-600 flex items-center justify-center hover:bg-emerald-50 shadow-md transform hover:scale-105">
-                        <i data-lucide="users" class="w-4 h-4"></i>
+                        <i data-lucide="users" class="w-4 h-4 pointer-events-none"></i>
                     </button>
-                    <span class="ml-1.5 text-xs font-bold text-slate-700 bg-white/90 px-1.5 py-0.5 rounded shadow-sm">משפחה</span>
+                    <span class="ml-1.5 text-xs font-bold text-slate-700 bg-white/90 px-1.5 py-0.5 rounded shadow-sm pointer-events-none">משפחה</span>
                 </div>
             </div>`;
     }
     return `
         <div style="direction: ltr;" class="relative w-full h-full pointer-events-none">
             <svg class="absolute top-0 left-0 w-full h-full overflow-visible pointer-events-none -z-10">
-                <path d="M 220 120 C 260 120, 260 85, 295 85" stroke="#94a3b8" stroke-width="2" fill="none" />
-                <path d="M 220 120 C 260 120, 260 155, 295 155" stroke="#94a3b8" stroke-width="2" fill="none" />
+                <path d="M 300 200 C 390 200, 390 155, 460 155" stroke="#94a3b8" stroke-width="2" fill="none" />
+                <path d="M 300 200 C 390 200, 390 245, 460 245" stroke="#94a3b8" stroke-width="2" fill="none" />
             </svg>
-            <div class="action-btn-details absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 330px; top: 85px; transform: translate(-50%, -50%);">
+            <div class="action-btn-details absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 470px; top: 155px; transform: translate(-50%, -50%);">
                 <button class="w-10 h-10 rounded-full bg-white border-2 border-indigo-500 text-indigo-600 flex items-center justify-center hover:bg-indigo-50 shadow-md transform hover:scale-105">
-                    <i data-lucide="info" class="w-5 h-5"></i>
+                    <i data-lucide="info" class="w-5 h-5 pointer-events-none"></i>
                 </button>
-                <span class="ml-2 text-sm font-bold text-slate-700 bg-white/90 px-2 py-1 rounded shadow-sm">פרטים</span>
+                <span class="ml-2 text-sm font-bold text-slate-700 bg-white/90 px-2 py-1 rounded shadow-sm pointer-events-none">פרטים</span>
             </div>
-            <div class="action-btn-family absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 330px; top: 155px; transform: translate(-50%, -50%);">
+            <div class="action-btn-family absolute flex items-center pointer-events-auto z-10 cursor-pointer" style="left: 470px; top: 245px; transform: translate(-50%, -50%);">
                 <button class="w-10 h-10 rounded-full bg-white border-2 border-emerald-500 text-emerald-600 flex items-center justify-center hover:bg-emerald-50 shadow-md transform hover:scale-105">
-                    <i data-lucide="users" class="w-5 h-5"></i>
+                    <i data-lucide="users" class="w-5 h-5 pointer-events-none"></i>
                 </button>
-                <span class="ml-2 text-sm font-bold text-slate-700 bg-white/90 px-2 py-1 rounded shadow-sm">משפחה</span>
+                <span class="ml-2 text-sm font-bold text-slate-700 bg-white/90 px-2 py-1 rounded shadow-sm pointer-events-none">משפחה</span>
             </div>
         </div>`;
 }
@@ -325,11 +325,13 @@ export function closeModal() {
             const el = document.getElementById(id);
             if (el) el.classList.add('hidden');
         });
-        if (backdrop) backdrop.classList.add('hidden'); // Removes the invisible shield!
+        if (backdrop) backdrop.classList.add('hidden'); // Destroys the invisible shield safely
     }, 300);
 }
+
 export function showToast(message, type = "success") {
     const toast = document.getElementById("toast-notification");
+    if (!toast) return;
     document.getElementById("toast-message").innerText = message;
     const icon = document.getElementById("toast-icon-container");
     
@@ -350,8 +352,14 @@ export function showToast(message, type = "success") {
 }
 
 export function showConfirm(title, body, onApprove) {
-    document.getElementById('confirm-title').innerText = title;
-    document.getElementById('confirm-body').innerText = body;
+    const titleEl = document.getElementById('confirm-title');
+    const bodyEl = document.getElementById('confirm-body');
+    const btnApprove = document.getElementById('btn-approve-confirm');
+    
+    if (titleEl) titleEl.innerText = title;
+    if (bodyEl) bodyEl.innerText = body;
+    if (btnApprove) {
+        btnApprove.onclick = () => { onApprove(); closeModal(); };
+    }
     openModal('confirm-modal');
-    document.getElementById('btn-approve-confirm').onclick = () => { onApprove(); closeModal(); };
 }
