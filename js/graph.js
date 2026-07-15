@@ -557,31 +557,34 @@ export function focusNode(nodeId) {
         .scale(scale)
         .translate(-nodeData.x, -nodeData.y);
 
-    // 3. Smooth camera movement synced directly with the D3 zoom handler to prevent freeze
-    svg.transition()
-        .duration(800)
-        .call(zoom.transform, transform); // Crucial: Syncs the internal D3 zoom state!
-
-    // 4. Replicate the EXACT behavior of a manual node click
-    // Clear any open action bubbles first
+    // 3. Clear action bubbles instantly to prevent visual artifacts during transition
     d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
 
-    // Select the specific node element we searched for
-    const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
+    // 4. Smooth camera movement synced directly with the D3 zoom handler
+    // We interrupt any active zoom transitions first to prevent freezing
+    svg.interrupt(); 
     
-    if (!selectedNode.empty()) {
-        // Show action bubbles
-        selectedNode.select(".node-actions")
-            .style("opacity", 1)
-            .style("pointer-events", "auto");
-        
-        // Bring the node to the front
-        selectedNode.raise();
-        
-        // Clear old visual highlights first
-        clearHighlights();
-        
-        // 5. Trigger the highlighted ancestor/descendant state
-        highlightDescendants(nodeId);
-    }
+    svg.transition()
+        .duration(800)
+        .call(zoom.transform, transform)
+        .on("end", () => {
+            // 5. Replicate the EXACT behavior of a manual node click AFTER the camera stops moving
+            const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
+            
+            if (!selectedNode.empty()) {
+                // Show action bubbles
+                selectedNode.select(".node-actions")
+                    .style("opacity", 1)
+                    .style("pointer-events", "auto");
+                
+                // Bring the node to the front
+                selectedNode.raise();
+                
+                // Clear old visual highlights first
+                clearHighlights();
+                
+                // Trigger the highlighted ancestor/descendant state
+                highlightDescendants(nodeId);
+            }
+        });
 }
