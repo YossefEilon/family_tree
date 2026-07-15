@@ -69,7 +69,7 @@ export function createNodeCard(data) {
     }
 
     let dateHtml = data.isAlive 
-        ? `<div class="truncate">${data.birth ? `${bornText}: ${data.birth}` : 'שנת לידה לא ידועה'}</div>` + (data.hebrewBirthDate ? (isBirthdayMonth ? `<div class="text-indigo-600 font-bold bg-indigo-50 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-0.5 text-[10px] w-max"><i data-lucide="cake" class="w-3 h-3"></i> ${celebrateText} ב${currentHebMonth}!</div>` : `<div class="text-slate-400 text-[10px] mt-0.5 truncate">${data.hebrewBirthDate}</div>`) : '')
+        ? `<div class="truncate">${data.birth ? `${bornText}:${data.birth}` : 'שנת לידה לא ידועה'}</div>` + (data.hebrewBirthDate ? (isBirthdayMonth ? `<div class="text-indigo-600 font-bold bg-indigo-50 inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-0.5 text-[10px] w-max"><i data-lucide="cake" class="w-3 h-3"></i> ${celebrateText} ב${currentHebMonth}!</div>` : `<div class="text-slate-400 text-[10px] mt-0.5 truncate">${data.hebrewBirthDate}</div>`) : '')
         : `<div class="truncate text-slate-600 font-semibold mt-0.5">${data.birth || '?'} - ${data.death || '?'}</div>` + (data.hebrewDeathDate ? `<div class="text-slate-400 text-[10px] mt-0.5 truncate">פטירה: ${data.hebrewDeathDate}</div>` : '');
 
     const accent = data.gender === 'male' ? 'bg-blue-400' : (data.gender === 'female' ? 'bg-rose-400' : 'bg-slate-400');
@@ -87,7 +87,7 @@ export function createNodeCard(data) {
                 <div class="text-xs text-slate-500 leading-snug flex flex-col justify-center">${dateHtml}</div>
                 ${badgesHtml}
             </div>
-            <button class="absolute top-2.5 left-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white/80 rounded-full p-1 transition-colors z-20" title="הצג פרטים מלאים">
+            <button class="btn-card-info pointer-events-auto absolute top-2.5 left-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white/80 rounded-full p-1 transition-colors z-20" title="הצג פרטים מלאים">
                 <i data-lucide="info" class="w-[18px] h-[18px] pointer-events-none"></i>
             </button>
         </div>`;
@@ -212,7 +212,6 @@ export function showNodeDetailsById(id, event) {
         hebrewDateEl.classList.add('hidden');
     }
 
-    // Fixed typo: "צาצאים" -> "צאצאים"
     const descCount = getDescendantIds(data.id).size - 1;
     if (descCount > 0) {
         document.getElementById('view-descendants-text').innerText = `${descCount} צאצאים`;
