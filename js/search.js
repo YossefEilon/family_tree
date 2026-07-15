@@ -1,6 +1,6 @@
 import { globalState } from './config.js';
 import { focusNode } from './graph.js';
-import { showNodeDetailsById } from './ui.js';
+// Removed the showNodeDetailsById import as it's no longer forced on search
 
 export function initSearch() {
     const searchInput = document.getElementById('search-input');
@@ -50,14 +50,14 @@ export function initSearch() {
 
             // Handle user selection
             li.addEventListener('click', () => {
-                // איפוס התיבה והעלמת התוצאות
+                // Clear input and hide results
                 searchInput.value = '';
-                searchInput.blur(); // סוגר את המקלדת בנייד
+                searchInput.blur(); 
                 searchResults.classList.add('hidden');
                 
-                // Trigger camera focus and open details modal
+                // Trigger ONLY the camera focus and visual highlight
+                // This now behaves exactly like a native click on the canvas!
                 focusNode(node.id);
-                showNodeDetailsById(node.id, null);
             });
 
             searchResults.appendChild(li);
