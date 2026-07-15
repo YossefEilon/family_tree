@@ -380,7 +380,7 @@ export function updateGraphView() {
     nodeEnter.append("foreignObject")
         .attr("class", "node-actions")
         .attr("width", 440).attr("height", 240)
-        .attr("x", -220).attr("y", -120) 
+        .attr("x", (nodeWidth / 2) - 180).attr("y", -120) 
         .style("opacity", 0).style("pointer-events", "none").style("transition", "opacity 0.2s ease");
 
     const nodes = nodeEnter.merge(nodeSelection);
