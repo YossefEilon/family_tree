@@ -550,36 +550,36 @@ export function focusNode(nodeId) {
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
     
-    // 1. זום רחב להצגת ההקשר של העץ (0.6 במקום ה-1.3 או 1.2 שהיה מקודם)
+    // 1. זום רחב להצגת ההקשר של העץ (0.6)
     const scale = 0.6; 
     const transform = d3.zoomIdentity
         .translate(width / 2, height / 2)
         .scale(scale)
         .translate(-nodeData.x, -nodeData.y);
 
-    // 2. תנועת מצלמה חלקה אל היעד בזום הרחב
-    d3.select('#tree-canvas').transition()
+    // 2. תנועת מצלמה חלקה אל היעד (שימוש במשתנה svg המקורי של המודול!)
+    svg.transition()
         .duration(800)
         .call(zoom.transform, transform);
 
-    // 3. יצירת מצב "SELECTED" (הדגשה) - עמעום שאר העץ
-    d3.selectAll('.node-group').transition().duration(400).style('opacity', d => d.id === nodeId ? 1 : 0.15);
-    d3.selectAll('.link-path').transition().duration(400).style('opacity', 0.1);
+    // 3. יצירת מצב "SELECTED" - שימוש נכון במחלקות ה-CSS הקיימות שלך!
+    d3.selectAll('.node').classed('node-dimmed', d => d.id !== nodeId);
+    d3.selectAll('.link').classed('link-dimmed', true);
     
-    // 4. הקפצת בן המשפחה הנבחר לחזית (כדי שלא יוסתר על ידי קווים או ישויות אחרות)
-    d3.selectAll('.node-group').filter(d => d.id === nodeId).raise();
+    // 4. הקפצת בן המשפחה הנבחר לחזית
+    d3.selectAll('.node').filter(d => d.id === nodeId).raise();
 
-    // 5. מנגנון שחרור בטוח למניעת קפיאת העץ: 
-    // אנחנו משתמשים ב-mousedown מופרד (clearFocus) שמאזין רק לרקע הריק כדי לא להרוס את הגרירה של D3
-    d3.select('#tree-canvas').on('mousedown.clearFocus', (event) => {
-        // בודק אם הלחיצה הייתה על הרקע (ה-SVG) ולא על קרוב משפחה אחר
-        if (event.target.tagName.toLowerCase() === 'svg') {
-            // החזרת האטימות לכל העץ (שחרור מצב SELECTED)
-            d3.selectAll('.node-group').transition().duration(400).style('opacity', 1);
-            d3.selectAll('.link-path').transition().duration(400).style('opacity', 1);
+    // 5. מנגנון שחרור בטוח: מאזין ללחיצה על הרקע ומנקה את ההדגשה
+    svg.on('click.clearFocus', (event) => {
+        // בודק שהלחיצה הייתה על הרקע הריק (ה-svg או הרשת שמאחור)
+        if (event.target.tagName.toLowerCase() === 'svg' || event.target.tagName.toLowerCase() === 'rect') {
             
-            // מחיקת המאזין אחרי שהמשימה בוצעה כדי לחסוך במשאבים
-            d3.select('#tree-canvas').on('mousedown.clearFocus', null);
+            // הסרת מחלקות העמעום (חזרה למצב רגיל)
+            d3.selectAll('.node').classed('node-dimmed', false);
+            d3.selectAll('.link').classed('link-dimmed', false);
+            
+            // מחיקת המאזין לאחר שהמשימה בוצעה
+            svg.on('click.clearFocus', null);
         }
     });
 }
