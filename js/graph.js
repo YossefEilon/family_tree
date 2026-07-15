@@ -538,48 +538,45 @@ function addSpouseDirect(partnerId) {
 
 /**
  * Pans and zooms the D3 canvas to center on a specific node securely,
- * with a wide zoom and a visual "SELECTED" state.
+ * triggering the exact same visual state as a manual click (highlighting descendants).
  */
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
     
-    // מוודא שיש קואורדינטות תקינות
+    // Ensure valid coordinates exist
     if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') return;
 
     const canvas = document.getElementById('tree-canvas');
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
     
-    // 1. זום רחב להצגת ההקשר של העץ (0.6)
+    // 1. Wide zoom to show context (0.6)
     const scale = 0.6; 
     const transform = d3.zoomIdentity
         .translate(width / 2, height / 2)
         .scale(scale)
         .translate(-nodeData.x, -nodeData.y);
 
-    // 2. תנועת מצלמה חלקה אל היעד (שימוש במשתנה svg המקורי של המודול!)
+    // 2. Smooth camera movement
     svg.transition()
         .duration(800)
         .call(zoom.transform, transform);
 
-    // 3. יצירת מצב "SELECTED" - שימוש נכון במחלקות ה-CSS הקיימות שלך!
-    d3.selectAll('.node').classed('node-dimmed', d => d.id !== nodeId);
-    d3.selectAll('.link').classed('link-dimmed', true);
-    
-    // 4. הקפצת בן המשפחה הנבחר לחזית
-    d3.selectAll('.node').filter(d => d.id === nodeId).raise();
+    // 3. Replicate the EXACT behavior of a normal node click
+    // First, clear any currently open action bubbles
+    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
 
-    // 5. מנגנון שחרור בטוח: מאזין ללחיצה על הרקע ומנקה את ההדגשה
-    svg.on('click.clearFocus', (event) => {
-        // בודק שהלחיצה הייתה על הרקע הריק (ה-svg או הרשת שמאחור)
-        if (event.target.tagName.toLowerCase() === 'svg' || event.target.tagName.toLowerCase() === 'rect') {
-            
-            // הסרת מחלקות העמעום (חזרה למצב רגיל)
-            d3.selectAll('.node').classed('node-dimmed', false);
-            d3.selectAll('.link').classed('link-dimmed', false);
-            
-            // מחיקת המאזין לאחר שהמשימה בוצעה
-            svg.on('click.clearFocus', null);
-        }
-    });
+    // Select the specific node element we searched for
+    const selectedNode = d3.selectAll('.node').filter(d => d.id === nodeId);
+    
+    if (!selectedNode.empty()) {
+        // Show its action bubbles
+        selectedNode.select(".node-actions").style("opacity", 1).style("pointer-events", "auto");
+        
+        // Bring the node to the front
+        selectedNode.raise();
+        
+        // Trigger the exact same descendant highlighting logic as handleNodeClick
+        highlightDescendants(nodeId);
+    }
 }
