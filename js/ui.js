@@ -295,28 +295,39 @@ export function toggleDeathInputs() {
 }
 
 export function openModal(id) {
-    document.getElementById('modal-backdrop').classList.remove('hidden');
-    document.getElementById(id).classList.remove('hidden');
+    const backdrop = document.getElementById('modal-backdrop');
+    const modal = document.getElementById(id);
+    
+    if (backdrop) backdrop.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
+    
     setTimeout(() => {
-        document.getElementById('modal-backdrop').classList.add('backdrop-enter-active');
-        document.getElementById(id).classList.add('modal-enter-active');
+        if (backdrop) backdrop.classList.add('backdrop-enter-active');
+        if (modal) modal.classList.add('modal-enter-active');
     }, 10);
 }
 
 export function closeModal() {
     const backdrop = document.getElementById('modal-backdrop');
-    backdrop.classList.remove('backdrop-enter-active');
-    ['view-modal', 'action-modal', 'passcode-modal', 'settings-menu-modal', 'confirm-modal'].forEach(id => {
-        document.getElementById(id).classList.remove('modal-enter-active');
+    if (backdrop) backdrop.classList.remove('backdrop-enter-active');
+    
+    const modals = ['view-modal', 'action-modal', 'passcode-modal', 'settings-menu-modal', 'confirm-modal'];
+    
+    // 1. Remove active classes safely
+    modals.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('modal-enter-active');
     });
+    
+    // 2. Wait for animation to finish, then hide safely
     setTimeout(() => {
-        ['view-modal', 'action-modal', 'passcode-modal', 'settings-menu-modal', 'confirm-modal'].forEach(id => {
-            document.getElementById(id).classList.add('hidden');
+        modals.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
         });
-        backdrop.classList.add('hidden');
+        if (backdrop) backdrop.classList.add('hidden'); // Removes the invisible shield!
     }, 300);
 }
-
 export function showToast(message, type = "success") {
     const toast = document.getElementById("toast-notification");
     document.getElementById("toast-message").innerText = message;
