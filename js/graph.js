@@ -538,31 +538,32 @@ function addSpouseDirect(partnerId) {
 
 /**
  * Pans and zooms the D3 canvas to center on a specific node securely,
- * with maximum safeguards against NaN coordinate freezing.
+ * while preventing D3 event lockups and HTML overlay interference.
  */
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
     
-    // 1. Strict Validation: Prevent NaN errors which permanently lock D3 zoom
-    if (!nodeData || isNaN(nodeData.x) || isNaN(nodeData.y)) {
-        console.error(`[D3 Error] Cannot focus node ${nodeId}: Invalid coordinates`, nodeData);
+    // 1. Strict Validation
+    if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') {
+        console.warn(`[D3] Cannot focus node ${nodeId}: Invalid coordinates.`);
         return;
     }
 
-    // 2. Safe Dimension Fallbacks
-    // If the canvas is momentarily detached, clientWidth is 0. We force a window fallback.
-    const canvas = document.getElementById('tree-canvas');
-    const width = (canvas && canvas.clientWidth > 0) ? canvas.clientWidth : window.innerWidth;
-    const height = (canvas && canvas.clientHeight > 0) ? canvas.clientHeight : window.innerHeight;
+    // 2. Clear HTML UI Interferences
+    // Forcefully blur the search bar and hide the dropdown so they don't block SVG mouse events
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.blur();
     
-    // 3. Apply the visual "selected" state INSTANTLY, before animations start.
-    // This prevents DOM selection conflicts while the camera is moving.
+    const searchResults = document.getElementById('search-results');
+    if (searchResults) searchResults.classList.add('hidden');
+
+    // 3. Apply Visual "Selected" State Instantly
     d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
     clearHighlights();
     
     const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
     if (!selectedNode.empty()) {
-        selectedNode.raise(); // Bring node to front
+        selectedNode.raise(); // Bring to front
         selectedNode.select(".node-actions")
             .style("opacity", 1)
             .style("pointer-events", "auto");
@@ -570,16 +571,22 @@ export function focusNode(nodeId) {
         highlightDescendants(nodeId);
     }
 
-    // 4. Calculate Mathematical Center (Strictly enforcing Number types)
-    const scale = 0.6; 
+    // 4. Calculate Mathematical Center
+    const canvas = document.getElementById('tree-canvas');
+    const width = canvas ? canvas.clientWidth : window.innerWidth;
+    const height = canvas ? canvas.clientHeight : window.innerHeight;
+    
     const transform = d3.zoomIdentity
         .translate(width / 2, height / 2)
-        .scale(scale)
-        .translate(-Number(nodeData.x), -Number(nodeData.y));
+        .scale(0.6)
+        .translate(-nodeData.x, -nodeData.y);
 
-    // 5. Safe Camera Tween using a Named Transition ("cameraMove")
-    // Isolating the animation prevents it from hijacking D3's native drag/pan listeners.
-    svg.transition("cameraMove")
+    // 5. Safe Zoom Execution
+    // We explicitly re-select the DOM element by ID and use the DEFAULT transition namespace.
+    // This guarantees D3 synchronizes the __zoom property, preventing the canvas freeze.
+    d3.select('#tree-canvas')
+        .interrupt() // Stop any current panning
+        .transition()
         .duration(800)
         .call(zoom.transform, transform);
 }
