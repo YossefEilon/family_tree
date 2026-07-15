@@ -538,53 +538,48 @@ function addSpouseDirect(partnerId) {
 
 /**
  * Pans and zooms the D3 canvas to center on a specific node securely,
- * triggering the exact same visual state as a manual click (highlighting descendants).
+ * with maximum safeguards against NaN coordinate freezing.
  */
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
     
-    // 1. Ensure valid coordinates exist
-    if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') return;
+    // 1. Strict Validation: Prevent NaN errors which permanently lock D3 zoom
+    if (!nodeData || isNaN(nodeData.x) || isNaN(nodeData.y)) {
+        console.error(`[D3 Error] Cannot focus node ${nodeId}: Invalid coordinates`, nodeData);
+        return;
+    }
 
+    // 2. Safe Dimension Fallbacks
+    // If the canvas is momentarily detached, clientWidth is 0. We force a window fallback.
     const canvas = document.getElementById('tree-canvas');
-    const width = canvas.clientWidth || window.innerWidth;
-    const height = canvas.clientHeight || window.innerHeight;
+    const width = (canvas && canvas.clientWidth > 0) ? canvas.clientWidth : window.innerWidth;
+    const height = (canvas && canvas.clientHeight > 0) ? canvas.clientHeight : window.innerHeight;
     
-    // 2. Calculate coordinates for wide context zoom (0.6)
+    // 3. Apply the visual "selected" state INSTANTLY, before animations start.
+    // This prevents DOM selection conflicts while the camera is moving.
+    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
+    clearHighlights();
+    
+    const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
+    if (!selectedNode.empty()) {
+        selectedNode.raise(); // Bring node to front
+        selectedNode.select(".node-actions")
+            .style("opacity", 1)
+            .style("pointer-events", "auto");
+        
+        highlightDescendants(nodeId);
+    }
+
+    // 4. Calculate Mathematical Center (Strictly enforcing Number types)
     const scale = 0.6; 
     const transform = d3.zoomIdentity
         .translate(width / 2, height / 2)
         .scale(scale)
-        .translate(-nodeData.x, -nodeData.y);
+        .translate(-Number(nodeData.x), -Number(nodeData.y));
 
-    // 3. Clear action bubbles instantly to prevent visual artifacts during transition
-    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
-
-    // 4. Smooth camera movement synced directly with the D3 zoom handler
-    // We interrupt any active zoom transitions first to prevent freezing
-    svg.interrupt(); 
-    
-    svg.transition()
+    // 5. Safe Camera Tween using a Named Transition ("cameraMove")
+    // Isolating the animation prevents it from hijacking D3's native drag/pan listeners.
+    svg.transition("cameraMove")
         .duration(800)
-        .call(zoom.transform, transform)
-        .on("end", () => {
-            // 5. Replicate the EXACT behavior of a manual node click AFTER the camera stops moving
-            const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
-            
-            if (!selectedNode.empty()) {
-                // Show action bubbles
-                selectedNode.select(".node-actions")
-                    .style("opacity", 1)
-                    .style("pointer-events", "auto");
-                
-                // Bring the node to the front
-                selectedNode.raise();
-                
-                // Clear old visual highlights first
-                clearHighlights();
-                
-                // Trigger the highlighted ancestor/descendant state
-                highlightDescendants(nodeId);
-            }
-        });
+        .call(zoom.transform, transform);
 }
