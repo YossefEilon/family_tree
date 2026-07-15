@@ -377,10 +377,11 @@ export function updateGraphView() {
         .attr("x", -nodeWidth / 2).attr("y", -nodeHeight / 2)
         .on("click", handleNodeClick);
 
+    // Expanded bounding box (600x400) centered perfectly (-300, -200)
     nodeEnter.append("foreignObject")
         .attr("class", "node-actions")
-        .attr("width", 440).attr("height", 240)
-        .attr("x", (nodeWidth / 2) - 180).attr("y", -120) 
+        .attr("width", 600).attr("height", 400)
+        .attr("x", -300).attr("y", -200) 
         .style("opacity", 0).style("pointer-events", "none").style("transition", "opacity 0.2s ease");
 
     const nodes = nodeEnter.merge(nodeSelection);
@@ -389,7 +390,7 @@ export function updateGraphView() {
          .style("opacity", 1)
          .attr("transform", d => `translate(${d.x}, ${d.y})`);
 
-    // Target the specific info button we tagged in ui.js and prevent bubbling
+    // Target the specific info button tagged in ui.js and prevent bubbling
     nodes.select(".main-card")
         .html(d => createNodeCard(d))
         .each(function(d) {
