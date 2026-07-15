@@ -543,40 +543,45 @@ function addSpouseDirect(partnerId) {
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
     
-    // Ensure valid coordinates exist
+    // 1. Ensure valid coordinates exist
     if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') return;
 
     const canvas = document.getElementById('tree-canvas');
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
     
-    // 1. Wide zoom to show context (0.6)
+    // 2. Calculate coordinates for wide context zoom (0.6)
     const scale = 0.6; 
     const transform = d3.zoomIdentity
         .translate(width / 2, height / 2)
         .scale(scale)
         .translate(-nodeData.x, -nodeData.y);
 
-    // 2. Smooth camera movement
+    // 3. Smooth camera movement synced directly with the D3 zoom handler to prevent freeze
     svg.transition()
         .duration(800)
-        .call(zoom.transform, transform);
+        .call(zoom.transform, transform); // Crucial: Syncs the internal D3 zoom state!
 
-    // 3. Replicate the EXACT behavior of a normal node click
-    // First, clear any currently open action bubbles
+    // 4. Replicate the EXACT behavior of a manual node click
+    // Clear any open action bubbles first
     d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
 
     // Select the specific node element we searched for
-    const selectedNode = d3.selectAll('.node').filter(d => d.id === nodeId);
+    const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
     
     if (!selectedNode.empty()) {
-        // Show its action bubbles
-        selectedNode.select(".node-actions").style("opacity", 1).style("pointer-events", "auto");
+        // Show action bubbles
+        selectedNode.select(".node-actions")
+            .style("opacity", 1)
+            .style("pointer-events", "auto");
         
         // Bring the node to the front
         selectedNode.raise();
         
-        // Trigger the exact same descendant highlighting logic as handleNodeClick
+        // Clear old visual highlights first
+        clearHighlights();
+        
+        // 5. Trigger the highlighted ancestor/descendant state
         highlightDescendants(nodeId);
     }
 }
