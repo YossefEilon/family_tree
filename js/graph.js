@@ -537,56 +537,52 @@ function addSpouseDirect(partnerId) {
 }
 
 /**
- * Pans and zooms the D3 canvas to center on a specific node securely,
- * while preventing D3 event lockups and HTML overlay interference.
+ * Pans and zooms the D3 canvas securely by deferring the camera transition
+ * so it doesn't collide with app.js HTML click events.
  */
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
     
-    // 1. Strict Validation
     if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') {
-        console.warn(`[D3] Cannot focus node ${nodeId}: Invalid coordinates.`);
+        console.warn(`Cannot focus node ${nodeId}`);
         return;
     }
 
-    // 2. Clear HTML UI Interferences
-    // Forcefully blur the search bar and hide the dropdown so they don't block SVG mouse events
+    // 1. Instantly kill the HTML UI so pointer-events return to the canvas
     const searchInput = document.getElementById('search-input');
-    if (searchInput) searchInput.blur();
-    
     const searchResults = document.getElementById('search-results');
+    if (searchInput) searchInput.blur();
     if (searchResults) searchResults.classList.add('hidden');
 
-    // 3. Apply Visual "Selected" State Instantly
-    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
+    // 2. Apply the visual highlights immediately 
     clearHighlights();
+    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
     
     const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
     if (!selectedNode.empty()) {
         selectedNode.raise(); // Bring to front
-        selectedNode.select(".node-actions")
-            .style("opacity", 1)
-            .style("pointer-events", "auto");
-        
+        selectedNode.select(".node-actions").style("opacity", 1).style("pointer-events", "auto");
         highlightDescendants(nodeId);
     }
 
-    // 4. Calculate Mathematical Center
-    const canvas = document.getElementById('tree-canvas');
-    const width = canvas ? canvas.clientWidth : window.innerWidth;
-    const height = canvas ? canvas.clientHeight : window.innerHeight;
-    
-    const transform = d3.zoomIdentity
-        .translate(width / 2, height / 2)
-        .scale(0.6)
-        .translate(-nodeData.x, -nodeData.y);
+    // 3. THE MAGIC TRICK: Defer the camera movement by 50ms.
+    // This allows app.js to completely finish resolving the user's click event
+    // before D3 takes control of the viewport.
+    setTimeout(() => {
+        const canvas = document.getElementById('tree-canvas');
+        const width = canvas ? canvas.clientWidth : window.innerWidth;
+        const height = canvas ? canvas.clientHeight : window.innerHeight;
+        
+        const transform = d3.zoomIdentity
+            .translate(width / 2, height / 2)
+            .scale(0.6)
+            .translate(-nodeData.x, -nodeData.y);
 
-    // 5. Safe Zoom Execution
-    // We explicitly re-select the DOM element by ID and use the DEFAULT transition namespace.
-    // This guarantees D3 synchronizes the __zoom property, preventing the canvas freeze.
-    d3.select('#tree-canvas')
-        .interrupt() // Stop any current panning
-        .transition()
-        .duration(800)
-        .call(zoom.transform, transform);
+        // We use the 'svg' variable explicitly just like resetZoomAction() does
+        svg.interrupt()
+           .transition()
+           .duration(800)
+           .call(zoom.transform, transform);
+           
+    }, 50);
 }
