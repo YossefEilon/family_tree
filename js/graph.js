@@ -537,27 +537,49 @@ function addSpouseDirect(partnerId) {
 }
 
 /**
- * Pans and zooms the D3 canvas to center on a specific node securely.
+ * Pans and zooms the D3 canvas to center on a specific node securely,
+ * with a wide zoom and a visual "SELECTED" state.
  */
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
     
-    // נוודא שיש לנקודה קואורדינטות תקינות לפני שזזים אליה
+    // מוודא שיש קואורדינטות תקינות
     if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') return;
 
     const canvas = document.getElementById('tree-canvas');
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
     
-    // רמת הזום לקפיצה 
-    const scale = 1.3;
+    // 1. זום רחב להצגת ההקשר של העץ (0.6 במקום ה-1.3 או 1.2 שהיה מקודם)
+    const scale = 0.6; 
     const transform = d3.zoomIdentity
         .translate(width / 2, height / 2)
         .scale(scale)
         .translate(-nodeData.x, -nodeData.y);
 
-    // תנועת מצלמה חלקה אל היעד
+    // 2. תנועת מצלמה חלקה אל היעד בזום הרחב
     d3.select('#tree-canvas').transition()
         .duration(800)
         .call(zoom.transform, transform);
+
+    // 3. יצירת מצב "SELECTED" (הדגשה) - עמעום שאר העץ
+    d3.selectAll('.node-group').transition().duration(400).style('opacity', d => d.id === nodeId ? 1 : 0.15);
+    d3.selectAll('.link-path').transition().duration(400).style('opacity', 0.1);
+    
+    // 4. הקפצת בן המשפחה הנבחר לחזית (כדי שלא יוסתר על ידי קווים או ישויות אחרות)
+    d3.selectAll('.node-group').filter(d => d.id === nodeId).raise();
+
+    // 5. מנגנון שחרור בטוח למניעת קפיאת העץ: 
+    // אנחנו משתמשים ב-mousedown מופרד (clearFocus) שמאזין רק לרקע הריק כדי לא להרוס את הגרירה של D3
+    d3.select('#tree-canvas').on('mousedown.clearFocus', (event) => {
+        // בודק אם הלחיצה הייתה על הרקע (ה-SVG) ולא על קרוב משפחה אחר
+        if (event.target.tagName.toLowerCase() === 'svg') {
+            // החזרת האטימות לכל העץ (שחרור מצב SELECTED)
+            d3.selectAll('.node-group').transition().duration(400).style('opacity', 1);
+            d3.selectAll('.link-path').transition().duration(400).style('opacity', 1);
+            
+            // מחיקת המאזין אחרי שהמשימה בוצעה כדי לחסוך במשאבים
+            d3.select('#tree-canvas').on('mousedown.clearFocus', null);
+        }
+    });
 }
