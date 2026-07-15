@@ -537,52 +537,46 @@ function addSpouseDirect(partnerId) {
 }
 
 /**
- * Pans and zooms the D3 canvas securely by deferring the camera transition
- * so it doesn't collide with app.js HTML click events.
+ * Pans and zooms the D3 canvas securely. 
+ * Uses requestAnimationFrame to detach from the HTML click event loop,
+ * preventing D3 canvas freezes.
  */
 export function focusNode(nodeId) {
     const nodeData = globalState.familyData.nodes.find(n => n.id === nodeId);
-    
-    if (!nodeData || typeof nodeData.x !== 'number' || typeof nodeData.y !== 'number') {
-        console.warn(`Cannot focus node ${nodeId}`);
-        return;
-    }
+    if (!nodeData) return;
 
-    // 1. Instantly kill the HTML UI so pointer-events return to the canvas
-    const searchInput = document.getElementById('search-input');
-    const searchResults = document.getElementById('search-results');
-    if (searchInput) searchInput.blur();
-    if (searchResults) searchResults.classList.add('hidden');
+    // Push execution to the next frame to prevent event collision with search.js
+    requestAnimationFrame(() => {
+        // 1. Forcefully clear HTML UI overlays so they don't block pointer events
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+        if (searchInput) searchInput.blur();
+        if (searchResults) searchResults.classList.add('hidden');
 
-    // 2. Apply the visual highlights immediately 
-    clearHighlights();
-    d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
-    
-    const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
-    if (!selectedNode.empty()) {
-        selectedNode.raise(); // Bring to front
-        selectedNode.select(".node-actions").style("opacity", 1).style("pointer-events", "auto");
-        highlightDescendants(nodeId);
-    }
-
-    // 3. THE MAGIC TRICK: Defer the camera movement by 50ms.
-    // This allows app.js to completely finish resolving the user's click event
-    // before D3 takes control of the viewport.
-    setTimeout(() => {
-        const canvas = document.getElementById('tree-canvas');
-        const width = canvas ? canvas.clientWidth : window.innerWidth;
-        const height = canvas ? canvas.clientHeight : window.innerHeight;
+        // 2. DOM Visuals: Apply the exact same state as handleNodeClick
+        clearHighlights();
+        d3.selectAll(".node-actions").style("opacity", 0).style("pointer-events", "none");
         
-        const transform = d3.zoomIdentity
-            .translate(width / 2, height / 2)
-            .scale(0.6)
-            .translate(-nodeData.x, -nodeData.y);
+        const selectedNode = g.selectAll('.node').filter(d => d.id === nodeId);
+        if (!selectedNode.empty()) {
+            selectedNode.raise();
+            selectedNode.select(".node-actions").style("opacity", 1).style("pointer-events", "auto");
+            highlightDescendants(nodeId);
+        }
 
-        // We use the 'svg' variable explicitly just like resetZoomAction() does
-        svg.interrupt()
-           .transition()
-           .duration(800)
-           .call(zoom.transform, transform);
-           
-    }, 50);
+        // 3. Mathematical Translation (Identical to your working resetZoomAction)
+        const parent = svg.node();
+        const width = parent.clientWidth || window.innerWidth;
+        const height = parent.clientHeight || window.innerHeight;
+        
+        const scale = 0.6;
+        // Calculate strict center coordinates based on the scale
+        const tx = (width / 2) - (scale * (nodeData.x || 0));
+        const ty = (height / 2) - (scale * (nodeData.y || 0));
+
+        // 4. Safe Execution on the Native SVG element
+        svg.transition()
+           .duration(750)
+           .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    });
 }
