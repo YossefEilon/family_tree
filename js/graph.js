@@ -389,7 +389,16 @@ export function updateGraphView() {
          .style("opacity", 1)
          .attr("transform", d => `translate(${d.x}, ${d.y})`);
 
-    nodes.select(".main-card").html(d => createNodeCard(d));
+    // Target the specific info button we tagged in ui.js and prevent bubbling
+    nodes.select(".main-card")
+        .html(d => createNodeCard(d))
+        .each(function(d) {
+            d3.select(this).select(".btn-card-info").on("click", (event) => {
+                event.stopPropagation(); 
+                showNodeDetailsById(d.id, event);
+            });
+        });
+
     nodes.select(".node-actions")
         .html(d => createActionBubbles(d))
         .each(function(d) {
