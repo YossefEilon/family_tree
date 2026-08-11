@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Family {
+  id            String         @id @default(cuid())
+  name          String
+  people        Person[]
+  relationships Relationship[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Person {
+  id                String         @id @default(cuid())
+  familyId          String
+  family            Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name              String
+  previousLastName  String?
+  role              String?
+  birthYear         Int?
+  hebrewBirthDate   String?
+  deathYear         Int?
+  hebrewDeathDate   String?
+  isAlive           Boolean        @default(true)
+  gender            String         @default("neutral")
+  birthCountry      String?
+  lifeStory         String?
+  profileImageUrl   String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  outgoing          Relationship[] @relation("source")
+  incoming          Relationship[] @relation("target")
+  @@index([familyId])
+}
+
+model Relationship {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  sourceId  String
+  source    Person   @relation("source", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetId  String
+  target    Person   @relation("target", fields: [targetId], references: [id], onDelete: Cascade)
+  type      String
+  createdAt DateTime @default(now())
+  @@unique([familyId, sourceId, targetId, type])
+  @@index([familyId])
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  familyId  String
+  actorId   String
+  action    String
+  entityId  String?
+  payload   Json?
+  createdAt DateTime @default(now())
+  @@index([familyId, createdAt])
+}

@@ -1,0 +1,31 @@
+---
+description: Dynamic Family Graph project context for AI agents
+alwaysApply: true
+---
+
+# Family Tree — Agent Context
+
+Full wiki: `docs/AGENT_WIKI.md` · Quick guide: `AGENTS.md`
+
+## Stack
+Zero-build SPA: `index.html` + ES modules in `js/`. D3 v7 graph, Tailwind CDN, Lucide icons, Hebrew RTL. Data from Google Apps Script (`API_URL` in `js/config.js`).
+
+## Edit map
+- Layout/render: `js/graph.js`
+- Cloud I/O: `js/api.js`
+- Modals/cards: `js/ui.js` + `index.html`
+- Events/CRUD: `js/app.js`
+- State/demo: `js/config.js`
+
+## Rules
+- Call `updateGraphView()` after mutating `globalState.familyData`
+- Use `?.` for DOM listeners (see `app.js`)
+- Do not add npm/build unless asked
+- Layout is `calculateDeterministicGrid()` — do not switch to force layout
+- New user strings: Hebrew
+
+## Known gaps (HTML missing in index.html)
+`settings-menu-modal`, `confirm-modal`, `toast-notification` — settings, delete confirm, and toasts are broken until added.
+
+## Admin
+Passcode `"Eilon"` in `app.js` sets `globalState.isAdmin = true`.
