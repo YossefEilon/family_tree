@@ -204,7 +204,7 @@ export default function HomePage() {
     const person = newPerson ? { id, familyId: source.familyId, ...newPerson } satisfies Person : null;
     const parentIds = type === "child" ? [source.id, ...spouses(graph, source.id)] : [];
     const relationships = type === "child" ? parentIds.map(sourceId => ({ familyId: source.familyId, sourceId, targetId: id, type: "parent" as const })) : [type === "partner" ? { familyId: source.familyId, sourceId: source.id, targetId: id, type: "spouse" as const } : { familyId: source.familyId, sourceId: id, targetId: source.id, type: "parent" as const }];
-    const next = { people: person ? [...graph.people, person] : graph.people, relationships: [...graph.relationships, ...graph.relationships.filter(existing => !relationships.some(candidate => existing.sourceId === candidate.sourceId && existing.targetId === candidate.targetId && existing.type === candidate.type)), ...relationships] };
+    const next = { people: person ? [...graph.people, person] : graph.people, relationships: [...graph.relationships.filter(existing => !relationships.some(candidate => existing.sourceId === candidate.sourceId && existing.targetId === candidate.targetId && existing.type === candidate.type)), ...relationships] };
     setGraph(next); setAddMemberForId(null); void saveGoogleSheetGraph(next);
   };
   const createStandaloneEntity = (personDetails: NewPersonDetails) => {

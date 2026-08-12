@@ -4,6 +4,16 @@ const API_URL = "/api/google-sheet";
 
 type SheetPerson = Record<string, unknown>;
 
+function uniqueRelationships(relationships: FamilyGraph["relationships"]): FamilyGraph["relationships"] {
+  const seen = new Set<string>();
+  return relationships.filter(link => {
+    const key = `${link.familyId}|${link.sourceId}|${link.targetId}|${link.type}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function yearFrom(value: unknown): number | undefined {
   const match = String(value ?? "").match(/\b(\d{4})\b/);
   return match ? Number(match[1]) : undefined;
@@ -30,10 +40,10 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
     people: (data.nodes ?? []).map(toPerson),
     relationships: (data.links ?? []).map(link => ({
       familyId: String(link.familyId ?? "default"), sourceId: String(typeof link.source === "object" ? (link.source as SheetPerson).id : link.source),
-      targetId: String(typeof link.target === "object" ? (link.target as SheetPerson).id : link.target), type: link.type === "spouse" ? "spouse" : "parent",
+      targetId: String(typeof link.target === "object" ? (link.target as SheetPerson).id : link.target), type: (link.type === "spouse" ? "spouse" : "parent") as "parent" | "spouse",
     })),
   };
-  const parsed = graphSchema.parse(graph);
+  const parsed = graphSchema.parse({ ...graph, relationships: uniqueRelationships(graph.relationships) });
   const relationships = [...parsed.relationships];
   const hasRelationship = (sourceId: string, targetId: string, type: "parent" | "spouse") => relationships.some(link => link.sourceId === sourceId && link.targetId === targetId && link.type === type);
   for (const spouse of parsed.relationships.filter(link => link.type === "spouse")) {
@@ -42,7 +52,7 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
     const reverseChildren = relationships.filter(link => link.type === "parent" && link.sourceId === spouse.targetId).map(link => link.targetId);
     for (const childId of reverseChildren) if (!hasRelationship(spouse.sourceId, childId, "parent")) relationships.push({ familyId: spouse.familyId, sourceId: spouse.sourceId, targetId: childId, type: "parent" });
   }
-  return { ...parsed, relationships };
+  return { ...parsed, relationships: uniqueRelationships(relationships) };
 }
 
 export async function saveGoogleSheetGraph(graph: FamilyGraph): Promise<void> {
@@ -51,7 +61,7 @@ export async function saveGoogleSheetGraph(graph: FamilyGraph): Promise<void> {
     birth: person.birthYear?.toString() ?? "", death: person.deathYear?.toString() ?? "", isAlive: person.isAlive,
     gender: person.gender, birthCountry: person.birthCountry ?? "", lifeStory: person.lifeStory ?? "", profilePic: person.profileImageUrl ?? "", profileImageUrl: person.profileImageUrl ?? "", level: 0,
   }));
-  const links = graph.relationships.map(link => ({ source: link.sourceId, target: link.targetId, type: link.type }));
+  const links = uniqueRelationships(graph.relationships).map(link => ({ source: link.sourceId, target: link.targetId, type: link.type }));
   const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nodes, links }) });
   if (!response.ok) throw new Error(`Google Sheets save failed (${response.status})`);
 }
