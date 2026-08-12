@@ -39,6 +39,8 @@ MANAGE_PASSWORD="..."
 
 `DATABASE_URL` must point to a hosted PostgreSQL database reachable from Vercel. A `localhost` database URL will not work in production. Never commit or publicly share these values.
 
+For the manage screen, add `MANAGE_PASSWORD` in Vercel with the exact password you want users to enter. In Vercel's Environment Variables form, enter the value without surrounding quote characters, select **Production**, and redeploy after saving. The value in `.env.local` is local-only and is not copied to Vercel.
+
 After changing environment variables, create a new deployment or redeploy the latest deployment. Make sure the variables are enabled for the correct Vercel environment, especially **Production**.
 
 ## Verification
