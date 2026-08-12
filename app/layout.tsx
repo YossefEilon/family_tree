@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "שורשים | עץ משפחה",
+  title: "עץ משפחה - אילון",
   description: "עץ משפחה דיגיטלי, נגיש ומאובטח",
 };
 
