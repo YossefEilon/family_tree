@@ -1,6 +1,6 @@
 # Agent Guide — Dynamic Family Graph
 
-This repository is a Next.js App Router application. It is a Hebrew, RTL family-tree product with a deterministic SVG graph layout.
+This repository is a Next.js App Router application. It is a Hebrew, RTL family-tree product with a deterministic SVG graph layout. The production application is deployed on Vercel at https://family-tree-kappa-wine.vercel.app/.
 
 ## Architecture
 
@@ -12,6 +12,15 @@ This repository is a Next.js App Router application. It is a Hebrew, RTL family-
 - `scripts/import-google-sheets.ts` — validated migration utility for the existing Apps Script JSON
 - `types/` — framework type augmentations
 - `lib/*.test.ts` — Vitest domain and layout tests
+
+## Deployment
+
+- Production runs on Vercel.
+- The production graph currently loads through `GOOGLE_SHEETS_API_URL`, which must be configured in Vercel under **Settings → Environment Variables** for the Production environment.
+- `.env.local` is for local development only and is not uploaded automatically to Vercel.
+- After changing Vercel environment variables, redeploy the application.
+- `DATABASE_URL` is only needed for database-backed persistence and must point to a hosted PostgreSQL database reachable from Vercel; `localhost` will not work in production.
+- Never expose `DATABASE_URL`, `AUTH_SECRET`, `ADMIN_PASSWORD`, or `MANAGE_PASSWORD` in client code, commits, logs, or documentation.
 
 ## Conventions
 
@@ -31,4 +40,4 @@ npm test
 npm run build
 ```
 
-Copy `.env.example` to `.env.local`, configure `DATABASE_URL` and Auth.js values, then run `npx prisma generate` before using persistence.
+Copy `.env.example` to `.env.local`, configure `GOOGLE_SHEETS_API_URL` for the graph, and configure `DATABASE_URL` plus Auth.js values only when using persistence and authentication. Run `npx prisma generate` before using Prisma persistence.

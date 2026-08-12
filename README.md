@@ -1,6 +1,10 @@
-# שורשים — Dynamic Family Graph
+# Dynamic Family Graph
 
-Next.js + TypeScript rewrite of the original zero-build family tree.
+Next.js + TypeScript family-tree application with a Hebrew, RTL interface and a deterministic SVG graph layout.
+
+The production site is deployed on Vercel:
+
+<https://family-tree-kappa-wine.vercel.app/>
 
 ## Development
 
@@ -11,7 +15,31 @@ npx prisma generate
 npm run dev
 ```
 
-The initial browser experience uses the typed demo graph. Configure `DATABASE_URL`, run a Prisma migration, and create a family record to enable persistence.
+The application loads the family graph through the Google Sheets API route. Configure `GOOGLE_SHEETS_API_URL` for local development. The value should be the deployed Google Apps Script web-app URL.
+
+## Vercel deployment
+
+Environment variables from `.env.local` are not uploaded automatically to Vercel. Configure them in the Vercel project under **Settings → Environment Variables**, then redeploy.
+
+Required for the Google Sheets-backed graph:
+
+```env
+GOOGLE_SHEETS_API_URL="https://script.google.com/macros/s/your-deployment-id/exec"
+```
+
+The following variables are required when authentication or database persistence is enabled:
+
+```env
+DATABASE_URL="postgresql://..."
+AUTH_SECRET="..."
+ADMIN_EMAIL="..."
+ADMIN_PASSWORD="..."
+MANAGE_PASSWORD="..."
+```
+
+`DATABASE_URL` must point to a hosted PostgreSQL database reachable from Vercel. A `localhost` database URL will not work in production. Never commit or publicly share these values.
+
+After changing environment variables, create a new deployment or redeploy the latest deployment. Make sure the variables are enabled for the correct Vercel environment, especially **Production**.
 
 ## Verification
 
