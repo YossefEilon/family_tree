@@ -19,11 +19,25 @@ function yearFrom(value: unknown): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
+function birthDateFrom(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : undefined;
+}
+
+function birthDateForStorage(value: string | undefined): string {
+  if (!value) return "";
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
+}
+
 function toPerson(raw: SheetPerson): Person {
+  const birthDate = birthDateFrom(raw.birthDate ?? raw.birth);
   return {
     id: String(raw.id), familyId: String(raw.familyId ?? "default"), name: String(raw.name ?? ""),
     previousLastName: String(raw.previousLastName ?? "") || undefined, role: String(raw.role ?? "") || undefined,
-    birthYear: yearFrom(raw.birthYear ?? raw.birth), hebrewBirthDate: String(raw.hebrewBirthDate ?? "") || undefined,
+    birthDate, birthYear: yearFrom(raw.birthYear ?? birthDate ?? raw.birth), hebrewBirthDate: String(raw.hebrewBirthDate ?? "") || undefined,
     deathYear: yearFrom(raw.deathYear ?? raw.death), hebrewDeathDate: String(raw.hebrewDeathDate ?? "") || undefined,
     isAlive: raw.isAlive === undefined ? !raw.death : Boolean(raw.isAlive),
     gender: raw.gender === "male" || raw.gender === "female" ? raw.gender : "neutral",
@@ -41,6 +55,7 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
     relationships: (data.links ?? []).map(link => ({
       familyId: String(link.familyId ?? "default"), sourceId: String(typeof link.source === "object" ? (link.source as SheetPerson).id : link.source),
       targetId: String(typeof link.target === "object" ? (link.target as SheetPerson).id : link.target), type: (link.type === "spouse" ? "spouse" : "parent") as "parent" | "spouse",
+      hebrewMarriageDate: String(link.hebrewMarriageDate ?? "") || undefined,
     })),
   };
   const parsed = graphSchema.parse({ ...graph, relationships: uniqueRelationships(graph.relationships) });
@@ -58,10 +73,10 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
 export async function saveGoogleSheetGraph(graph: FamilyGraph): Promise<void> {
   const nodes = graph.people.map(person => ({
     id: person.id, name: person.name, previousLastName: person.previousLastName ?? "", role: person.role ?? "",
-    birth: person.birthYear?.toString() ?? "", death: person.deathYear?.toString() ?? "", isAlive: person.isAlive,
+    birth: birthDateForStorage(person.birthDate) || String(person.birthYear ?? ""), birthDate: birthDateForStorage(person.birthDate), hebrewBirthDate: person.hebrewBirthDate ?? "", death: person.deathYear?.toString() ?? "", isAlive: person.isAlive,
     gender: person.gender, birthCountry: person.birthCountry ?? "", lifeStory: person.lifeStory ?? "", profilePic: person.profileImageUrl ?? "", profileImageUrl: person.profileImageUrl ?? "", level: 0,
   }));
-  const links = uniqueRelationships(graph.relationships).map(link => ({ source: link.sourceId, target: link.targetId, type: link.type }));
+  const links = uniqueRelationships(graph.relationships).map(link => ({ source: link.sourceId, target: link.targetId, type: link.type, hebrewMarriageDate: link.hebrewMarriageDate ?? "" }));
   const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nodes, links }) });
   if (!response.ok) throw new Error(`Google Sheets save failed (${response.status})`);
 }

@@ -1,9 +1,29 @@
 import { z } from "zod";
 
+const hebrewDateMonths = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר א׳", "אדר ב׳", "אדר", "ניסן", "אייר", "סיוון", "תמוז", "אב", "אלול"];
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day;
+}
+
+function isValidHebrewBirthDate(value: string): boolean {
+  const match = value.match(/^(.+?) ב(.+?) (.+)$/);
+  if (!match || !hebrewDateMonths.includes(match[2])) return false;
+  const day = match[1].replace(/[״׳'"\s]/g, "");
+  const year = match[3].replace(/[״׳'"\s]/g, "");
+  const hasHebrewNumerals = (part: string) => /^[אבגדהוזחטיכלמנסעפצקרשתךםןףץ]+$/.test(part);
+  const validDay = /^\d{1,2}$/.test(day) ? Number(day) >= 1 && Number(day) <= 30 : hasHebrewNumerals(day);
+  const validYear = /^\d{4}$/.test(year) ? Number(year) >= 5000 && Number(year) <= 6000 : hasHebrewNumerals(year);
+  return validDay && validYear;
+}
+
 export const personSchema = z.object({
   id: z.string().min(1), familyId: z.string().default("default"), name: z.string().min(1),
-  previousLastName: z.string().optional(), role: z.string().optional(), birthYear: z.number().int().optional(),
-  hebrewBirthDate: z.string().optional(), deathYear: z.number().int().optional(), hebrewDeathDate: z.string().optional(),
+  previousLastName: z.string().optional(), role: z.string().optional(), birthDate: z.string().refine(isValidIsoDate, "תאריך לידה לועזי אינו תקין").optional(), birthYear: z.number().int().optional(),
+  hebrewBirthDate: z.string().refine(isValidHebrewBirthDate, "תאריך לידה עברי אינו תקין").optional(), deathYear: z.number().int().optional(), hebrewDeathDate: z.string().optional(),
   isAlive: z.boolean().default(true), gender: z.enum(["male", "female", "neutral"]).default("neutral"),
   birthCountry: z.string().optional(), lifeStory: z.string().optional(),
   profileImageUrl: z.string().refine(value => {
@@ -11,7 +31,10 @@ export const personSchema = z.object({
     try { return new URL(value).protocol === "https:" || new URL(value).protocol === "http:"; } catch { return false; }
   }, "Invalid profile image URL").optional(),
 });
-export const relationshipSchema = z.object({ id: z.string().optional(), familyId: z.string().default("default"), sourceId: z.string(), targetId: z.string(), type: z.enum(["parent", "spouse"]) });
+export const relationshipSchema = z.object({
+  id: z.string().optional(), familyId: z.string().default("default"), sourceId: z.string(), targetId: z.string(),
+  type: z.enum(["parent", "spouse"]), hebrewMarriageDate: z.string().optional(),
+});
 export const graphSchema = z.object({ people: z.array(personSchema), relationships: z.array(relationshipSchema) });
 export type Person = z.infer<typeof personSchema>;
 export type Relationship = z.infer<typeof relationshipSchema>;
@@ -30,7 +53,39 @@ export function childrenOf(graph: FamilyGraph, id: string): Set<string> {
 }
 export function ageOf(person: Person, year = new Date().getFullYear()): number | undefined {
   if (person.birthYear === undefined) return undefined;
-  return Math.max(0, (person.deathYear ?? year) - person.birthYear);
+  return Math.floor(Math.max(0, (person.deathYear ?? year) - person.birthYear));
+}
+
+export function ageLabel(person: Person, date = new Date()): string | undefined {
+  const age = ageOf(person, date.getFullYear());
+  if (age === undefined) return undefined;
+  if (age > 0) return `${age} שנים`;
+
+  const endMonth = person.deathYear === undefined ? date.getMonth() : 11;
+  const months = Math.max(0, (date.getFullYear() - person.birthYear!) * 12 + endMonth);
+  return `${months} חודשים`;
+}
+
+const hebrewMonths = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר ב׳", "אדר א׳", "אדר", "ניסן", "אייר", "סיוון", "תמוז", "אב", "אלול"];
+
+function normalizeHebrewDate(value: string): string {
+  return value.replace(/[״“”\"׳’']/g, "").replace(/\s+/g, " ").trim();
+}
+
+export function currentHebrewMonth(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("he-u-ca-hebrew", { month: "long" }).formatToParts(date);
+  return parts.find(part => part.type === "month")?.value ?? "";
+}
+
+export function hebrewMonthOf(dateValue: string | undefined): string | undefined {
+  if (!dateValue) return undefined;
+  const normalized = normalizeHebrewDate(dateValue);
+  return hebrewMonths.find(month => normalized.includes(normalizeHebrewDate(month)));
+}
+
+export function isBirthdayInCurrentHebrewMonth(person: Person, date = new Date()): boolean {
+  const birthMonth = hebrewMonthOf(person.hebrewBirthDate);
+  return Boolean(birthMonth && birthMonth === currentHebrewMonth(date));
 }
 
 export const demoGraph: FamilyGraph = {

@@ -24,6 +24,7 @@ model Person {
   previousLastName  String?
   role              String?
   birthYear         Int?
+  birthDate         String?
   hebrewBirthDate   String?
   deathYear         Int?
   hebrewDeathDate   String?

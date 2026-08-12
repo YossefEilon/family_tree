@@ -7,7 +7,19 @@ body { background: #f5f7fb; color: var(--ink); font-family: Heebo, system-ui, sa
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 .app-shell { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1.5rem; background: rgba(255,255,255,.9); border-bottom: 1px solid #e7ebf2; position: relative; z-index: 2; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1.5rem .8rem 5rem; background: rgba(255,255,255,.9); border-bottom: 1px solid #e7ebf2; position: relative; z-index: 2; }
+.menu-anchor { position: absolute; top: .8rem; left: 1.5rem; z-index: 5; }
+.menu-trigger { min-width: 2.7rem; padding: .55rem .7rem; font-size: 1.25rem; line-height: 1; }
+.menu-panel { position: absolute; top: calc(100% + .45rem); left: 0; width: 17rem; padding: .4rem; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; box-shadow: 0 12px 30px #17203325; }
+.menu-item { display: block; width: 100%; padding: .6rem .75rem; border: 0; border-radius: .55rem; background: transparent; color: var(--ink); text-align: left; font-weight: 600; }
+.menu-item:hover { background: #edf1f7; }
+.birthday-menu { padding: .55rem .65rem .7rem; border-bottom: 1px solid #e7ebf2; }
+.birthday-menu h2 { margin: 0 0 .45rem; font-size: .95rem; }
+.birthday-list { display: grid; gap: .2rem; }
+.birthday-menu-item { display: flex; align-items: center; gap: .45rem; width: 100%; padding: .4rem .35rem; border: 0; border-radius: .5rem; background: transparent; color: var(--ink); text-align: right; }
+.birthday-menu-item:hover { background: #fff1f6; }
+.birthday-icon { font-size: 1rem; }
+.birthday-empty { margin: 0; color: var(--muted); font-size: .82rem; }
 .brand { display: flex; align-items: center; gap: .7rem; font-weight: 800; font-size: 1.2rem; }
 .brand-mark { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; color: white; background: linear-gradient(135deg,#4f46e5,#7c3aed); border-radius: .8rem; }
 .toolbar { display: flex; align-items: center; gap: .55rem; }
@@ -16,6 +28,8 @@ button { cursor: pointer; }
 .button { border: 0; border-radius: .75rem; padding: .6rem .9rem; color: var(--ink); background: #edf1f7; font-weight: 600; }
 .button:hover { background: #e0e7f1; }
 .button.primary { color: white; background: var(--brand); }
+.button.danger { color: #b42318; background: #fee4e2; }
+.button.danger:hover { background: #fecdca; }
 .button.ghost { background: transparent; }
 .canvas-shell { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .graph-svg { display: block; width: 100%; height: 100%; min-height: 0; background: radial-gradient(#e4e9f2 1px, transparent 1px); background-size: 24px 24px; cursor: grab; touch-action: none; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
@@ -30,6 +44,8 @@ button { cursor: pointer; }
 .person-card .name { fill: var(--ink); font-size: 16px; font-weight: 800; }
 .person-card .meta { fill: var(--muted); font-size: 12px; }
 .person-card .role { fill: var(--brand); font-weight: 700; }
+.birthday-badge rect { fill: #fff0f5; stroke: #f2a4bd; stroke-width: 1; }
+.birthday-badge text { fill: #b32658; font-size: 12px; font-weight: 800; }
 .person-card .family-meta { fill: #4c5970; font-size: 11px; }
 .person-card .profile-image { clip-path: circle(50%); }
 .add-member-button { display: none; cursor: pointer; }
@@ -39,6 +55,19 @@ body[data-family-edit="true"] .add-member-button { display: block; }
 .person-card .dot.male { fill: #4f83cc; } .person-card .dot.female { fill: #df7096; } .person-card .dot.neutral { fill: #94a3b8; }
 .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: #17203366; padding: 1rem; z-index: 3; }
 .panel { width: min(100%, 34rem); max-height: 90vh; overflow: auto; padding: 1.5rem; background: white; border-radius: 1.25rem; box-shadow: 0 24px 70px #17203335; }
+.birthday-balloons { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.balloon { position: absolute; bottom: -5rem; width: 2.25rem; height: 2.85rem; border-radius: 50% 50% 46% 46%; opacity: 0; box-shadow: inset -.35rem -.35rem .45rem #17203322; animation: balloon-flight 4.5s ease-out forwards; }
+.balloon::before { content: ""; position: absolute; left: 50%; bottom: -.35rem; width: .35rem; height: .35rem; background: inherit; transform: translateX(-50%) rotate(45deg); }
+.balloon::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 7rem; background: #ffffffbb; transform: translateX(-50%); }
+.balloon-1 { left: 12%; background: #f06b91; animation-delay: .05s; }
+.balloon-2 { left: 25%; background: #f7b84b; animation-delay: .45s; }
+.balloon-3 { left: 39%; background: #6fc5e8; animation-delay: .2s; }
+.balloon-4 { left: 52%; background: #9d84e8; animation-delay: .75s; }
+.balloon-5 { left: 66%; background: #69c58d; animation-delay: .35s; }
+.balloon-6 { left: 78%; background: #f08363; animation-delay: .6s; }
+.balloon-7 { left: 89%; background: #e878b3; animation-delay: .9s; }
+@keyframes balloon-flight { 0% { opacity: 0; transform: translateY(0) rotate(-8deg); } 12% { opacity: .95; } 100% { opacity: 0; transform: translateY(-125vh) rotate(12deg); } }
+@media (prefers-reduced-motion: reduce) { .balloon { animation: none; opacity: .85; transform: translateY(-45vh); } }
 .panel h2 { margin-top: 0; }
 .profile-panel { display: flex; justify-content: center; margin: 0; }
 .profile-panel img, .profile-placeholder { width: 7.5rem; height: 7.5rem; object-fit: cover; border-radius: 50%; border: 5px solid #eef1f8; }
@@ -69,8 +98,15 @@ body[data-family-edit="true"] .add-member-button { display: block; }
 .panel-header:has(+ .person-details) .button { margin-inline-start: auto; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .field { display: grid; gap: .3rem; } .field.full { grid-column: 1/-1; }
+.date-selects { display: grid; grid-template-columns: .8fr 1.4fr 1fr; gap: .5rem; direction: rtl; }
+.date-part { display: grid; gap: .2rem; color: var(--muted); font-size: .75rem; }
+.date-hint { color: var(--muted); font-size: .72rem; }
+.date-picker { position: relative; }
+.date-display { direction: ltr; }
+.calendar-input { position: absolute; top: 0; right: 0; width: 2.8rem !important; height: 100%; opacity: 0; cursor: pointer; }
 .field input, .field textarea, .field select { width: 100%; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: .65rem; }
 .panel-actions { display: flex; justify-content: flex-start; gap: .6rem; margin-top: 1.2rem; }
+.panel-actions-spacer { flex: 1; }
 .relationship-editor { margin-top: .5rem; padding: 1rem; background: #f7f8fc; border: 1px solid #e9edf5; border-radius: 1rem; }
 .relationship-editor h3 { margin: 0 0 .8rem; font-size: 1rem; }
 .relationship-editor small { color: #137343; }
@@ -79,9 +115,10 @@ body[data-family-edit="true"] .add-member-button { display: block; }
 .legend > span { display: none; }
 .status { padding: .25rem .55rem; border-radius: 999px; background: #e8f8ef; color: #137343; font-size: .8rem; font-weight: 700; }
 @media (max-width: 700px) {
-  .topbar { align-items: stretch; flex-direction: column; gap: .55rem; padding: .55rem .75rem; }
+  .topbar { align-items: stretch; flex-direction: column; gap: .55rem; padding: .55rem .75rem .55rem 4rem; }
   .brand { min-height: 2.2rem; font-size: 1.05rem; }
   .brand-mark { width: 2.15rem; height: 2.15rem; border-radius: .65rem; }
+  .menu-anchor { top: .55rem; left: .75rem; }
   .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, auto); gap: .4rem; }
   .toolbar > div:first-child { grid-column: 1 / -1; }
   .search { width: 100%; min-width: 0; padding: .55rem .7rem; }

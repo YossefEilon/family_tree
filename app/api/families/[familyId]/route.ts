@@ -15,6 +15,15 @@ export async function PUT(request: Request, context: { params: Promise<{ familyI
   const { familyId } = await context.params; const parsed = graphSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "נתוני המשפחה אינם תקינים", details: parsed.error.flatten() }, { status: 400 });
   const data = parsed.data;
-  await db.$transaction(async (tx) => { await tx.person.deleteMany({ where: { familyId } }); await tx.person.createMany({ data: data.people.map(({ id: _, ...p }) => ({ ...p, familyId })) }); await tx.relationship.createMany({ data: data.relationships.map(({ id: _, ...r }) => ({ ...r, familyId })) }); });
+  await db.$transaction(async (tx) => {
+    await tx.person.deleteMany({ where: { familyId } });
+    await tx.person.createMany({ data: data.people.map(({ id: _, ...person }) => ({
+      ...person,
+      birthDate: person.birthDate ? String(person.birthDate) : null,
+      hebrewBirthDate: person.hebrewBirthDate ? String(person.hebrewBirthDate) : null,
+      familyId,
+    })) });
+    await tx.relationship.createMany({ data: data.relationships.map(({ id: _, ...r }) => ({ ...r, familyId })) });
+  });
   return NextResponse.json({ ok: true });
 }

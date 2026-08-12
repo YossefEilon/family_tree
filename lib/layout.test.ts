@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { calculateFamilyLayout, edgePath } from "./layout";
-import { demoGraph, descendants, spouses } from "./domain";
+import { currentHebrewMonth, demoGraph, descendants, hebrewMonthOf, isBirthdayInCurrentHebrewMonth, spouses } from "./domain";
 
 describe("family graph domain", () => {
   it("finds descendants without looping", () => expect([...descendants(demoGraph, "1")]).toEqual(expect.arrayContaining(["1", "2", "3", "4", "5"])));
   it("finds spouses in both directions", () => { expect(spouses(demoGraph, "10")).toEqual(new Set(["1"])); });
+  it("recognizes Hebrew birthday months", () => {
+    const date = new Date(2025, 7, 23);
+    const month = currentHebrewMonth(date);
+    const person = { ...demoGraph.people[0], hebrewBirthDate: `י״ב ב${month} תש״ל` };
+    expect(hebrewMonthOf(person.hebrewBirthDate)).toBe(month);
+    expect(isBirthdayInCurrentHebrewMonth(person, date)).toBe(true);
+    expect(isBirthdayInCurrentHebrewMonth({ ...person, hebrewBirthDate: "י״ב בתשרי תש״ל" }, date)).toBe(false);
+  });
 });
 describe("deterministic layout", () => {
   it("places every person and keeps generations ordered", () => { const a = calculateFamilyLayout(demoGraph, 1200), b = calculateFamilyLayout(demoGraph, 1200); expect(a.people.map(p => [p.id,p.x,p.y])).toEqual(b.people.map(p => [p.id,p.x,p.y])); expect(a.people.find(p => p.id === "4")!.y).toBeGreaterThan(a.people.find(p => p.id === "2")!.y); });
