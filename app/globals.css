@@ -23,7 +23,7 @@ button { cursor: pointer; }
 .graph-svg:active { cursor: grabbing; }
 .edge { fill: none; stroke: #b9c3d4; stroke-width: 2.5; }
 .edge.spouse { stroke: var(--rose); stroke-dasharray: 8 5; }
-.edge.highlighted { stroke-width: 6; filter: drop-shadow(0 2px 3px #4f46e655); }
+.edge.highlighted { stroke: var(--brand); stroke-width: 5; filter: drop-shadow(0 2px 3px #4f46e655); }
 .person-card { filter: drop-shadow(0 5px 8px #17203312); cursor: pointer; }
 .person-card rect { fill: var(--surface); stroke: #dce3ef; stroke-width: 2; transition: stroke .15s, filter .15s; }
 .person-card:hover rect, .person-card.selected rect { stroke: var(--brand); stroke-width: 3; }
