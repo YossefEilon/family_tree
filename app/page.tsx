@@ -140,7 +140,13 @@ function BirthdayBalloons() {
   return <div className="birthday-balloons" aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <span key={index} className={`balloon balloon-${index + 1}`} />)}</div>;
 }
 
-type ImageEditorState = { src: string; zoom: number; pan: { x: number; y: number } };
+type ImageEditorState = { src: string; zoom: number; pan: { x: number; y: number }; width: number; height: number };
+
+function imagePanLimit(editor: ImageEditorState, axis: "x" | "y"): number {
+  const aspect = editor.width / editor.height;
+  const overflowRatio = axis === "x" ? Math.max(1, aspect) : Math.max(1, 1 / aspect);
+  return Math.max(0, (272 * overflowRatio * editor.zoom - 272) / 2);
+}
 
 function ProfileImageField({ value, onChange }: { value?: string; onChange: (value: string | undefined) => void }) {
   const [editor, setEditor] = useState<ImageEditorState | null>(null);
@@ -162,7 +168,7 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
     if (!file.type.startsWith("image/")) return;
     const src = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => setEditor({ src, zoom: 1, pan: { x: 0, y: 0 } });
+    image.onload = () => setEditor({ src, zoom: 1, pan: { x: 0, y: 0 }, width: image.naturalWidth, height: image.naturalHeight });
     image.onerror = () => { URL.revokeObjectURL(src); window.alert("לא ניתן לפתוח את התמונה"); };
     image.src = src;
   };
@@ -192,10 +198,11 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
 
   const updatePan = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!editor || !draggingRef.current) return;
-    const maxPan = 136 * (editor.zoom - 1);
+    const maxPanX = imagePanLimit(editor, "x");
+    const maxPanY = imagePanLimit(editor, "y");
     const x = editor.pan.x + event.clientX - lastPointerRef.current.x;
     const y = editor.pan.y + event.clientY - lastPointerRef.current.y;
-    setEditor({ ...editor, pan: { x: Math.max(-maxPan, Math.min(maxPan, x)), y: Math.max(-maxPan, Math.min(maxPan, y)) } });
+    setEditor({ ...editor, pan: { x: Math.max(-maxPanX, Math.min(maxPanX, x)), y: Math.max(-maxPanY, Math.min(maxPanY, y)) } });
     lastPointerRef.current = { x: event.clientX, y: event.clientY };
   };
 
@@ -204,7 +211,7 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
     {value && !editor && <img className="image-field-preview" src={value} alt="תצוגה מקדימה של תמונת הפרופיל" />}
     {editor ? <div className="image-editor" role="group" aria-label="התאמת תמונת הפרופיל">
       <div className="image-crop-preview" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); draggingRef.current = true; lastPointerRef.current = { x: event.clientX, y: event.clientY }; }} onPointerMove={updatePan} onPointerUp={() => { draggingRef.current = false; }} onPointerCancel={() => { draggingRef.current = false; }}><img src={editor.src} alt="תצוגה מקדימה לחיתוך" style={{ transform: `translate(${editor.pan.x / editor.zoom}px, ${editor.pan.y / editor.zoom}px) scale(${editor.zoom})` }} /></div>
-      <label className="image-zoom">הגדלה <input type="range" min="1" max="2.5" step="0.05" value={editor.zoom} onChange={event => { const zoom = Number(event.target.value); const maxPan = 136 * (zoom - 1); setEditor({ ...editor, zoom, pan: { x: Math.max(-maxPan, Math.min(maxPan, editor.pan.x)), y: Math.max(-maxPan, Math.min(maxPan, editor.pan.y)) } }); }} /><output>{Math.round(editor.zoom * 100)}%</output></label>
+      <label className="image-zoom">הגדלה <input type="range" min="1" max="2.5" step="0.05" value={editor.zoom} onChange={event => { const zoom = Number(event.target.value); const next = { ...editor, zoom }; const maxPanX = imagePanLimit(next, "x"); const maxPanY = imagePanLimit(next, "y"); setEditor({ ...next, pan: { x: Math.max(-maxPanX, Math.min(maxPanX, editor.pan.x)), y: Math.max(-maxPanY, Math.min(maxPanY, editor.pan.y)) } }); }} /><output>{Math.round(editor.zoom * 100)}%</output></label>
       <small className="image-editor-hint">גררו את התמונה כדי לשנות את המיקום</small>
       <div className="image-editor-actions"><button type="button" className="button" onClick={closeEditor}>ביטול</button><button type="button" className="button primary" onClick={saveEditedImage}>שימוש בתמונה</button></div>
     </div> : <>
