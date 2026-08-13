@@ -74,8 +74,11 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
 }
 
 function parseGoogleSheetGraph(data: { nodes?: SheetPerson[]; links?: Record<string, unknown>[] }): FamilyGraph {
+  // Google Sheets commonly includes empty rows in the exported range.
+  // They are not family members and must not be passed to the strict schema.
+  const nodes = (data.nodes ?? []).filter(raw => String(raw.id ?? "").trim() && String(raw.name ?? "").trim());
   const graph = {
-    people: (data.nodes ?? []).map(toPerson),
+    people: nodes.map(toPerson),
     relationships: (data.links ?? []).map(link => ({
       familyId: String(link.familyId ?? "default"), sourceId: String(typeof link.source === "object" ? (link.source as SheetPerson).id : link.source),
       targetId: String(typeof link.target === "object" ? (link.target as SheetPerson).id : link.target), type: (link.type === "spouse" ? "spouse" : "parent") as "parent" | "spouse",
