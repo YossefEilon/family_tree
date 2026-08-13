@@ -140,11 +140,13 @@ function BirthdayBalloons() {
   return <div className="birthday-balloons" aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <span key={index} className={`balloon balloon-${index + 1}`} />)}</div>;
 }
 
-type ImageEditorState = { src: string; zoom: number };
+type ImageEditorState = { src: string; zoom: number; pan: { x: number; y: number } };
 
 function ProfileImageField({ value, onChange }: { value?: string; onChange: (value: string | undefined) => void }) {
   const [editor, setEditor] = useState<ImageEditorState | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const draggingRef = useRef(false);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const src = editor?.src;
@@ -160,7 +162,7 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
     if (!file.type.startsWith("image/")) return;
     const src = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => setEditor({ src, zoom: 1 });
+    image.onload = () => setEditor({ src, zoom: 1, pan: { x: 0, y: 0 } });
     image.onerror = () => { URL.revokeObjectURL(src); window.alert("לא ניתן לפתוח את התמונה"); };
     image.src = src;
   };
@@ -178,7 +180,7 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
       const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * editor.zoom;
       const width = image.naturalWidth * scale;
       const height = image.naturalHeight * scale;
-      context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
+      context.drawImage(image, (size - width) / 2 + editor.pan.x * 600 / 272, (size - height) / 2 + editor.pan.y * 600 / 272, width, height);
       let compressed = canvas.toDataURL("image/jpeg", .65);
       if (compressed.length > 48000) compressed = canvas.toDataURL("image/jpeg", .45);
       if (compressed.length > 48000) { window.alert("לא ניתן לדחוס את התמונה לגודל המתאים ל-Google Sheets"); return; }
@@ -188,12 +190,22 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
     image.src = editor.src;
   };
 
+  const updatePan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!editor || !draggingRef.current) return;
+    const maxPan = 136 * (editor.zoom - 1);
+    const x = editor.pan.x + event.clientX - lastPointerRef.current.x;
+    const y = editor.pan.y + event.clientY - lastPointerRef.current.y;
+    setEditor({ ...editor, pan: { x: Math.max(-maxPan, Math.min(maxPan, x)), y: Math.max(-maxPan, Math.min(maxPan, y)) } });
+    lastPointerRef.current = { x: event.clientX, y: event.clientY };
+  };
+
   return <div className="image-field full">
-    <div className="image-field-heading"><span>תמונת פרופיל</span><small>{value ? "ניתן להחליף את התמונה" : "התמונה תישמר ב-Google Sheets"}</small></div>
+    <div className="image-field-heading"><span>תמונת פרופיל</span><small>{value ? "ניתן להחליף את התמונה" : "בחירת תמונה מהמכשיר"}</small></div>
     {value && !editor && <img className="image-field-preview" src={value} alt="תצוגה מקדימה של תמונת הפרופיל" />}
     {editor ? <div className="image-editor" role="group" aria-label="התאמת תמונת הפרופיל">
-      <div className="image-crop-preview"><img src={editor.src} alt="תצוגה מקדימה לחיתוך" style={{ transform: `scale(${editor.zoom})` }} /></div>
-      <label className="image-zoom">הגדלה <input type="range" min="1" max="2.5" step="0.05" value={editor.zoom} onChange={event => setEditor({ ...editor, zoom: Number(event.target.value) })} /><output>{Math.round(editor.zoom * 100)}%</output></label>
+      <div className="image-crop-preview" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); draggingRef.current = true; lastPointerRef.current = { x: event.clientX, y: event.clientY }; }} onPointerMove={updatePan} onPointerUp={() => { draggingRef.current = false; }} onPointerCancel={() => { draggingRef.current = false; }}><img src={editor.src} alt="תצוגה מקדימה לחיתוך" style={{ transform: `translate(${editor.pan.x / editor.zoom}px, ${editor.pan.y / editor.zoom}px) scale(${editor.zoom})` }} /></div>
+      <label className="image-zoom">הגדלה <input type="range" min="1" max="2.5" step="0.05" value={editor.zoom} onChange={event => { const zoom = Number(event.target.value); const maxPan = 136 * (zoom - 1); setEditor({ ...editor, zoom, pan: { x: Math.max(-maxPan, Math.min(maxPan, editor.pan.x)), y: Math.max(-maxPan, Math.min(maxPan, editor.pan.y)) } }); }} /><output>{Math.round(editor.zoom * 100)}%</output></label>
+      <small className="image-editor-hint">גררו את התמונה כדי לשנות את המיקום</small>
       <div className="image-editor-actions"><button type="button" className="button" onClick={closeEditor}>ביטול</button><button type="button" className="button primary" onClick={saveEditedImage}>שימוש בתמונה</button></div>
     </div> : <>
       <button type="button" className="button image-pick-button" onClick={() => inputRef.current?.click()}>{value ? "החלפת תמונה" : "בחירת תמונה"}</button>
@@ -205,7 +217,7 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
 
 type LineageRow = { title: string; people: Person[] };
 
-function VerticalFamilyTree({ graph, root, onClose, onSelectPerson }: { graph: FamilyGraph; root: Person; onClose: () => void; onSelectPerson: (id: string) => void }) {
+function CumulativeFamilyTree({ graph, root, onClose }: { graph: FamilyGraph; root: Person; onClose: () => void }) {
   const peopleById = new Map(graph.people.map(person => [person.id, person]));
   const parents = new Map<string, string[]>();
   const children = new Map<string, string[]>();
@@ -214,11 +226,60 @@ function VerticalFamilyTree({ graph, root, onClose, onSelectPerson }: { graph: F
     parents.set(relationship.targetId, [...(parents.get(relationship.targetId) ?? []), relationship.sourceId]);
     children.set(relationship.sourceId, [...(children.get(relationship.sourceId) ?? []), relationship.targetId]);
   }
+  const initialVisibleIds = new Set([root.id, ...(parents.get(root.id) ?? []), ...(children.get(root.id) ?? [])]);
+  const [visibleIdsState, setVisibleIdsState] = useState<Set<string>>(() => initialVisibleIds);
+  const [history, setHistory] = useState<{ visibleIds: Set<string>; selectedId: string }[]>([]);
+  const [selectedId, setSelectedId] = useState(root.id);
+  useEffect(() => { setVisibleIdsState(new Set([root.id, ...(parents.get(root.id) ?? []), ...(children.get(root.id) ?? [])])); setHistory([]); setSelectedId(root.id); }, [root.id]);
+
+  const visibleIds = visibleIdsState;
+  const distance = new Map<string, number>([[root.id, 0]]);
+  const queue = [root.id];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    const currentDistance = distance.get(id)!;
+    const connected = [...(parents.get(id) ?? []).map(parentId => [parentId, -1] as const), ...(children.get(id) ?? []).map(childId => [childId, 1] as const)];
+    connected.forEach(([nextId, direction]) => { if (!distance.has(nextId)) { distance.set(nextId, currentDistance + direction); queue.push(nextId); } });
+  }
+  const rows = new Map<number, Person[]>();
+  [...visibleIds].forEach(id => { const person = peopleById.get(id); const level = distance.get(id); if (!person || level === undefined) return; rows.set(level, [...(rows.get(level) ?? []), person]); });
+  const sortedLevels = [...rows.keys()].sort((a, b) => a - b);
+  const generationLabel = (level: number) => level === 0 ? "האדם שנבחר" : level < 0 ? `דור ${Math.abs(level)} מעל` : `דור ${level} מתחת`;
+  const explore = (personId: string) => {
+    const nextVisibleIds = new Set(visibleIdsState);
+    nextVisibleIds.add(personId);
+    if ((parents.get(selectedId) ?? []).includes(personId)) (parents.get(personId) ?? []).forEach(parentId => nextVisibleIds.add(parentId));
+    else if ((children.get(selectedId) ?? []).includes(personId)) (children.get(personId) ?? []).forEach(childId => nextVisibleIds.add(childId));
+    setHistory(previous => [...previous, { visibleIds: new Set(visibleIdsState), selectedId }]);
+    setVisibleIdsState(nextVisibleIds);
+    setSelectedId(personId);
+  };
+  const goBack = () => { const previous = history.at(-1); if (!previous) return; setHistory(current => current.slice(0, -1)); setVisibleIdsState(previous.visibleIds); setSelectedId(previous.selectedId); };
+  return <div className="overlay lineage-overlay" role="dialog" aria-modal="true" aria-labelledby="lineage-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel lineage-panel"><div className="panel-header"><div><h2 id="lineage-title">המשפחה המורחבת</h2><p className="lineage-subtitle">בחירת בני משפחה מרחיבה את התצוגה</p></div><div className="lineage-header-actions"><button className="button" disabled={history.length === 0} onClick={goBack}>חזרה</button><button className="button ghost" onClick={onClose} aria-label="סגירה">×</button></div></div><div className="lineage-scroll">{sortedLevels.map(level => <div className="lineage-level" key={level}><span className="lineage-level-label">{generationLabel(level)}</span><div className="lineage-people">{rows.get(level)!.map(person => <button key={person.id} className={`lineage-person ${person.id === selectedId ? "root" : ""}`} onClick={() => explore(person.id)}><span className={`lineage-dot ${person.gender}`} /><span>{person.name}</span>{person.role?.trim() && <small>{person.role}</small>}</button>)}</div></div>)}</div></section></div>;
+}
+
+function VerticalFamilyTree({ graph, root, onClose, onSelectPerson }: { graph: FamilyGraph; root: Person; onClose: () => void; onSelectPerson: (id: string) => void }) {
+  const [activeRootId, setActiveRootId] = useState(root.id);
+  const [visibleAncestors, setVisibleAncestors] = useState(1);
+  const [visibleDescendants, setVisibleDescendants] = useState(1);
+  const [history, setHistory] = useState<string[]>([]);
+  useEffect(() => { setActiveRootId(root.id); setVisibleAncestors(1); setVisibleDescendants(1); setHistory([]); }, [root.id]);
+  const peopleById = new Map(graph.people.map(person => [person.id, person]));
+  const parents = new Map<string, string[]>();
+  const children = new Map<string, string[]>();
+  for (const relationship of graph.relationships) {
+    if (relationship.type !== "parent") continue;
+    parents.set(relationship.targetId, [...(parents.get(relationship.targetId) ?? []), relationship.sourceId]);
+    children.set(relationship.sourceId, [...(children.get(relationship.sourceId) ?? []), relationship.targetId]);
+  }
+  const activeRoot = peopleById.get(activeRootId) ?? root;
+  const navigateTo = (personId: string) => { setHistory(previous => [...previous, activeRoot.id]); setActiveRootId(personId); setVisibleAncestors(1); setVisibleDescendants(1); };
+  const goBack = () => { const previous = history.at(-1); if (!previous) return; setHistory(current => current.slice(0, -1)); setActiveRootId(previous); setVisibleAncestors(1); setVisibleDescendants(1); };
   const makeRows = (direction: "up" | "down"): LineageRow[] => {
     const rows: LineageRow[] = [];
-    let frontier = [root.id];
-    const seen = new Set([root.id]);
-    for (let generation = 1; frontier.length > 0 && generation <= 12; generation += 1) {
+    let frontier = [activeRoot.id];
+    const seen = new Set([activeRoot.id]);
+    for (let generation = 1; frontier.length > 0 && generation <= 99; generation += 1) {
       const nextIds = frontier.flatMap(id => direction === "up" ? parents.get(id) ?? [] : children.get(id) ?? []).filter(id => !seen.has(id));
       nextIds.forEach(id => seen.add(id));
       const rowPeople = nextIds.map(id => peopleById.get(id)).filter((person): person is Person => Boolean(person));
@@ -229,8 +290,12 @@ function VerticalFamilyTree({ graph, root, onClose, onSelectPerson }: { graph: F
   };
   const ancestorRows = makeRows("up");
   const descendantRows = makeRows("down");
-  const renderRow = (row: LineageRow, index: number) => <div className="lineage-level" key={`${row.title}-${index}`}><span className="lineage-level-label">{row.title}</span><div className="lineage-people">{row.people.map(person => <button key={person.id} className="lineage-person" onClick={() => onSelectPerson(person.id)}><span className={`lineage-dot ${person.gender}`} /><span>{person.name}</span>{person.role?.trim() && <small>{person.role}</small>}</button>)}</div></div>;
-  return <div className="overlay lineage-overlay" role="dialog" aria-modal="true" aria-labelledby="lineage-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel lineage-panel"><div className="panel-header"><div><h2 id="lineage-title">המשפחה המורחבת</h2><p className="lineage-subtitle">הדורות של {root.name}</p></div><button className="button ghost" onClick={onClose} aria-label="סגירה">×</button></div><div className="lineage-scroll">{ancestorRows.map(renderRow)}<div className="lineage-level current"><span className="lineage-level-label">האדם שנבחר</span><div className="lineage-people"><button className="lineage-person root" onClick={() => onSelectPerson(root.id)}><span className={`lineage-dot ${root.gender}`} /><span>{root.name}</span>{root.role?.trim() && <small>{root.role}</small>}</button></div></div>{descendantRows.map(renderRow)}{ancestorRows.length === 0 && descendantRows.length === 0 && <p className="lineage-empty">לא נמצאו קשרי הורות עבור אדם זה.</p>}</div></section></div>;
+  const shownAncestorRows = ancestorRows.slice(-visibleAncestors);
+  const shownDescendantRows = descendantRows.slice(0, visibleDescendants);
+  const canShowMoreAncestors = shownAncestorRows.length < ancestorRows.length;
+  const canShowMoreDescendants = shownDescendantRows.length < descendantRows.length;
+  const renderRow = (row: LineageRow, index: number) => <div className="lineage-level" key={`${row.title}-${index}`}><span className="lineage-level-label">{row.title}</span><div className="lineage-people">{row.people.map(person => <button key={person.id} className="lineage-person" onClick={() => navigateTo(person.id)}><span className={`lineage-dot ${person.gender}`} /><span>{person.name}</span>{person.role?.trim() && <small>{person.role}</small>}</button>)}</div></div>;
+  return <div className="overlay lineage-overlay" role="dialog" aria-modal="true" aria-labelledby="lineage-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel lineage-panel"><div className="panel-header"><div><h2 id="lineage-title">המשפחה המורחבת</h2><p className="lineage-subtitle">הדורות של {activeRoot.name}</p></div><div className="lineage-header-actions"><button className="button" disabled={history.length === 0} onClick={goBack}>חזרה</button><button className="button ghost" onClick={onClose} aria-label="סגירה">×</button></div></div><div className="lineage-scroll">{canShowMoreAncestors && <button className="button lineage-expand" onClick={() => setVisibleAncestors(value => value + 1)}>הצג דור נוסף למעלה</button>}{shownAncestorRows.map(renderRow)}<div className="lineage-level current"><span className="lineage-level-label">האדם שנבחר</span><div className="lineage-people"><button className="lineage-person root" onClick={() => setActiveRootId(activeRoot.id)}><span className={`lineage-dot ${activeRoot.gender}`} /><span>{activeRoot.name}</span>{activeRoot.role?.trim() && <small>{activeRoot.role}</small>}</button></div></div>{shownDescendantRows.map(renderRow)}{canShowMoreDescendants && <button className="button lineage-expand" onClick={() => setVisibleDescendants(value => value + 1)}>הצג דור נוסף למטה</button>}{ancestorRows.length === 0 && descendantRows.length === 0 && <p className="lineage-empty">לא נמצאו קשרי הורות עבור אדם זה.</p>}</div></section></div>;
 }
 
 function LegacyPersonPanel({ person, stats, marriageDate, onClose, onSave, onFilter, onShowLineage, onBack, isFiltered, canEdit }: { person: Person; stats: PersonStats; marriageDate?: string; onClose: () => void; onSave: (p: Person) => void; onFilter: () => void; onShowLineage: () => void; onBack: () => void; isFiltered: boolean; canEdit: boolean }) {
@@ -517,7 +582,7 @@ export default function HomePage() {
   const svgPoint = (clientX: number, clientY: number) => { const svg = svgRef.current; const matrix = svg?.getScreenCTM()?.inverse(); if (!svg || !matrix) return { x: 0, y: 0 }; const point = svg.createSVGPoint(); point.x = clientX; point.y = clientY; const viewPoint = point.matrixTransform(matrix); return { x: viewPoint.x, y: viewPoint.y }; };
   const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => { pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY }); didDrag.current = false; if (pointers.current.size === 1) panStart.current = { x: event.clientX, y: event.clientY, offset }; else { lastTouchTap.current = null; const points = [...pointers.current.values()]; pinchStart.current = { distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y), scale }; panStart.current = null; didDrag.current = true; event.currentTarget.setPointerCapture(event.pointerId); } };
   const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => { if (!pointers.current.has(event.pointerId)) return; pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY }); const points = [...pointers.current.values()]; if (points.length >= 2 && pinchStart.current) { const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y); const nextScale = Math.max(.4, Math.min(20, pinchStart.current.scale * distance / pinchStart.current.distance)); const midpoint = svgPoint((points[0].x + points[1].x) / 2, (points[0].y + points[1].y) / 2); const worldPoint = { x: (midpoint.x - offset.x) / scale, y: (midpoint.y - offset.y) / scale }; setScale(nextScale); setOffset({ x: midpoint.x - worldPoint.x * nextScale, y: midpoint.y - worldPoint.y * nextScale }); return; } if (points.length === 1 && panStart.current) { const rect = svgRef.current!.getBoundingClientRect(); const movementMultiplier = 2; const svgScale = Math.min(rect.width / layout.width, rect.height / layout.height); const dx = (event.clientX - panStart.current.x) / svgScale * movementMultiplier; const dy = (event.clientY - panStart.current.y) / svgScale * movementMultiplier; if (Math.abs(dx) > 4 || Math.abs(dy) > 4) { didDrag.current = true; event.currentTarget.setPointerCapture(event.pointerId); } setOffset({ x: panStart.current.offset.x + dx, y: panStart.current.offset.y + dy }); } };
-  const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => { const wasSinglePointer = pointers.current.size === 1; pointers.current.delete(event.pointerId); const points = [...pointers.current.values()]; if (points.length < 2) pinchStart.current = null; panStart.current = points.length === 1 ? { x: points[0].x, y: points[0].y, offset } : null; if (event.type === "pointercancel" || event.pointerType !== "touch" || !wasSinglePointer || didDrag.current) { lastTouchTap.current = null; return; } const now = Date.now(); const previousTap = lastTouchTap.current; const isDoubleTap = previousTap && now - previousTap.time < 350 && Math.hypot(event.clientX - previousTap.x, event.clientY - previousTap.y) < 32; if (isDoubleTap) { lastTouchTap.current = null; zoomAt(event.clientX, event.clientY, Math.min(12, scale + .45)); } else { lastTouchTap.current = { time: now, x: event.clientX, y: event.clientY }; } };
+  const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => { const wasSinglePointer = pointers.current.size === 1; pointers.current.delete(event.pointerId); const points = [...pointers.current.values()]; if (points.length < 2) pinchStart.current = null; panStart.current = points.length === 1 ? { x: points[0].x, y: points[0].y, offset } : null; if (event.type === "pointercancel" || event.pointerType !== "touch" || !wasSinglePointer || didDrag.current) { lastTouchTap.current = null; return; } const now = Date.now(); const previousTap = lastTouchTap.current; const isDoubleTap = previousTap && now - previousTap.time < 350 && Math.hypot(event.clientX - previousTap.x, event.clientY - previousTap.y) < 32; if (isDoubleTap) { lastTouchTap.current = null; zoomAt(event.clientX, event.clientY, Math.min(20, scale * 2)); } else { lastTouchTap.current = { time: now, x: event.clientX, y: event.clientY }; } };
   const focusOnPerson = (personId: string) => {
     const fullLayout = calculateFamilyLayout(graph, viewportWidth);
     const positionedPerson = fullLayout.people.find(candidate => candidate.id === personId);
@@ -553,7 +618,7 @@ export default function HomePage() {
   return <main className="app-shell"><header className="topbar"><div className="menu-anchor"><button className="button menu-trigger" aria-label="פתיחת תפריט" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>☰</button>{menuOpen && <div className="menu-panel" role="menu"><button className="menu-item" role="menuitem" onClick={() => { setCalendarOpen(true); setMenuOpen(false); }}>אירועים משפחתיים בחודש זה</button><button className="menu-item" role="menuitem" onClick={() => { setMenuOpen(false); canEdit ? leaveManageMode() : setManagePasswordOpen(true); }}>{canEdit ? "יציאה מניהול" : "ניהול"}</button></div>}</div><div className="brand"><span className="brand-mark">♧</span><span>עץ משפחה - משפחת אילון</span>{canEdit && <span className="status">מצב עריכה</span>}</div><div className="toolbar"><div style={{ position: "relative" }}><input className="search" aria-label="חיפוש בני משפחה" placeholder="חיפוש לפי שם…" value={query} onChange={e => setQuery(e.target.value)} />{matches.length > 0 && <div className="panel" style={{ position: "absolute", top: "3rem", right: 0, padding: ".4rem", width: "100%", zIndex: 4 }}>{matches.map(p => <button key={p.id} className="button ghost" style={{ display: "block", width: "100%", textAlign: "right" }} onClick={() => { focusOnPerson(p.id); setSelectedId(p.id); setSpouseFocusId(null); setQuery(""); }}>{p.name}</button>)}</div>}</div><button className="button" onClick={() => setScale(s => Math.min(12, s + .45))}>＋</button><button className="button" onClick={() => setScale(s => Math.max(.4, s - .45))}>−</button><button className="button" onClick={focusOnIsaacAylon}>מיקוד</button>{canEdit && <button className="button primary" onClick={() => setNewEntityOpen(true)}>אדם חדש</button>}</div></header>
     <section className="canvas-shell"><svg className="graph-svg" ref={svgRef} viewBox={`0 0 ${layout.width} ${layout.height}`} onWheel={e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.max(.4, Math.min(12, scale - e.deltaY * .003))); }} onTouchMove={e => { if (e.touches.length > 1) e.preventDefault(); }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} aria-label="עץ המשפחה"><g transform={`translate(${offset.x} ${offset.y}) scale(${scale})`}>{layout.relationships.map((r, i) => { const path = edgePath(r, layout.people); const directlyConnected = spouseFocusId !== null && (r.sourceId === spouseFocusId || r.targetId === spouseFocusId); const highlighted = directlyConnected || (r.type === "parent" && highlightedDescendants.has(r.targetId)); return path ? <path key={`${r.sourceId}-${r.targetId}-${i}`} className={`edge ${r.type}${highlighted ? " highlighted" : ""}`} d={path} /> : null; })}{layout.people.map(p => <PersonCard key={p.id} person={p} stats={personStats.get(p.id) ?? { children: 0, descendants: 0 }} selected={p.id === selectedId || p.id === spouseFocusId} onClick={() => activatePerson(p.id)} />)}</g></svg><div className="legend"><span>● זכר</span><span>● נקבה</span>{filter && <button className="button" onClick={() => setFilter(null)}>הצג הכול</button>}</div></section>
     {selected && <PersonPanel person={selected} stats={personStats.get(selected.id) ?? { children: 0, descendants: 0 }} marriageDate={marriageDatesByPerson.get(selected.id)} canEdit={canEdit} onClose={() => setSelectedId(null)} onDelete={deletePerson} onShowLineage={() => setLineagePersonId(selected.id)} onFilter={() => { const filteredLayout = calculateFamilyLayout(graphForFilter(selected.id), viewportWidth); const positionedSelected = filteredLayout.people.find(person => person.id === selected.id); setFilter(selected.id); setScale(1); if (positionedSelected) setOffset({ x: filteredLayout.width / 2 - positionedSelected.x, y: NODE_HEIGHT / 2 + 24 - positionedSelected.y }); setSelectedId(null); setSpouseFocusId(null); }} onSave={savePerson} onAddRelationship={addRelationship} />}
-    {lineagePersonId && graph.people.find(person => person.id === lineagePersonId) && <VerticalFamilyTree graph={graph} root={graph.people.find(person => person.id === lineagePersonId)!} onClose={() => setLineagePersonId(null)} onSelectPerson={id => { setLineagePersonId(null); setSelectedId(id); setSpouseFocusId(id); }} />}
+    {lineagePersonId && graph.people.find(person => person.id === lineagePersonId) && <CumulativeFamilyTree graph={graph} root={graph.people.find(person => person.id === lineagePersonId)!} onClose={() => setLineagePersonId(null)} />}
     {addMemberForId && canEdit && graph.people.find(person => person.id === addMemberForId) && <AddRelationshipPanel source={graph.people.find(person => person.id === addMemberForId)!} people={graph.people} onClose={() => setAddMemberForId(null)} onCreate={createRelationship} />}
     {newEntityOpen && canEdit && <NewEntityPanel onClose={() => setNewEntityOpen(false)} onCreate={createStandaloneEntity} />}
     {calendarOpen && <HebrewCalendarPanel date={calendarDate} events={monthlyEvents(graph, calendarDate)} onChangeMonth={direction => setCalendarDate(current => shiftHebrewMonth(current, direction))} onClose={() => setCalendarOpen(false)} onSelectPerson={id => { focusOnPerson(id); setSelectedId(id); setSpouseFocusId(null); }} />}
