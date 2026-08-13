@@ -20,10 +20,12 @@ function isValidHebrewBirthDate(value: string): boolean {
   return validDay && validYear;
 }
 
+const significantDateSchema = z.object({ label: z.string().min(1), date: z.string().refine(isValidHebrewBirthDate, "תאריך עברי אינו תקין") });
+
 export const personSchema = z.object({
   id: z.string().min(1), familyId: z.string().default("default"), name: z.string().min(1),
   previousLastName: z.string().optional(), role: z.string().optional(), birthDate: z.string().refine(isValidIsoDate, "תאריך לידה לועזי אינו תקין").optional(), birthYear: z.number().int().optional(),
-  hebrewBirthDate: z.string().refine(isValidHebrewBirthDate, "תאריך לידה עברי אינו תקין").optional(), deathYear: z.number().int().optional(), hebrewDeathDate: z.string().optional(),
+  hebrewBirthDate: z.string().refine(isValidHebrewBirthDate, "תאריך לידה עברי אינו תקין").optional(), deathYear: z.number().int().optional(), hebrewDeathDate: z.string().optional(), significantDates: z.array(significantDateSchema).optional(),
   isAlive: z.boolean().default(true), gender: z.enum(["male", "female", "neutral"]).default("neutral"),
   birthCountry: z.string().optional(), lifeStory: z.string().optional(),
   profileImageUrl: z.string().refine(value => {
@@ -39,6 +41,7 @@ export const graphSchema = z.object({ people: z.array(personSchema), relationshi
 export type Person = z.infer<typeof personSchema>;
 export type Relationship = z.infer<typeof relationshipSchema>;
 export type FamilyGraph = z.infer<typeof graphSchema>;
+export type MonthlyEvent = { id: string; type: "birthday" | "anniversary" | "memorial" | "significant"; label: string; date: string; personIds: string[] };
 
 export function descendants(graph: FamilyGraph, rootId: string): Set<string> {
   const result = new Set<string>();
@@ -163,6 +166,22 @@ export function hebrewMonthOf(dateValue: string | undefined): string | undefined
 export function isBirthdayInCurrentHebrewMonth(person: Person, date = new Date()): boolean {
   const birthMonth = hebrewMonthOf(person.hebrewBirthDate);
   return Boolean(birthMonth && birthMonth === currentHebrewMonth(date));
+}
+
+export function monthlyEvents(graph: FamilyGraph, date = new Date()): MonthlyEvent[] {
+  const month = currentHebrewMonth(date);
+  const events: MonthlyEvent[] = [];
+  for (const person of graph.people) {
+    if (person.hebrewBirthDate && hebrewMonthOf(person.hebrewBirthDate) === month) events.push({ id: `birthday-${person.id}`, type: "birthday", label: `יום הולדת — ${person.name}`, date: person.hebrewBirthDate, personIds: [person.id] });
+    if (person.hebrewDeathDate && hebrewMonthOf(person.hebrewDeathDate) === month) events.push({ id: `memorial-${person.id}`, type: "memorial", label: `יום זיכרון — ${person.name}`, date: person.hebrewDeathDate, personIds: [person.id] });
+    for (const [index, event] of (person.significantDates ?? []).entries()) if (hebrewMonthOf(event.date) === month) events.push({ id: `significant-${person.id}-${index}`, type: "significant", label: `${event.label} — ${person.name}`, date: event.date, personIds: [person.id] });
+  }
+  for (const [index, relationship] of graph.relationships.entries()) {
+    if (relationship.type !== "spouse" || !relationship.hebrewMarriageDate || hebrewMonthOf(relationship.hebrewMarriageDate) !== month) continue;
+    const names = [relationship.sourceId, relationship.targetId].map(id => graph.people.find(person => person.id === id)?.name).filter(Boolean).join(" ו-");
+    events.push({ id: `anniversary-${index}`, type: "anniversary", label: `יום נישואין — ${names}`, date: relationship.hebrewMarriageDate, personIds: [relationship.sourceId, relationship.targetId] });
+  }
+  return events.sort((left, right) => left.date.localeCompare(right.date, "he"));
 }
 
 export const demoGraph: FamilyGraph = {
