@@ -1,6 +1,15 @@
 import { graphSchema, type FamilyGraph, type Person } from "./domain";
 
 const API_URL = "/api/google-sheet";
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 500;
+
+export class GoogleSheetRequestError extends Error {
+  constructor(public readonly status?: number) {
+    super(status ? `Google Sheets request failed (${status})` : "Google Sheets request failed");
+    this.name = "GoogleSheetRequestError";
+  }
+}
 
 type SheetPerson = Record<string, unknown>;
 
@@ -47,9 +56,24 @@ function toPerson(raw: SheetPerson): Person {
 }
 
 export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
-  const response = await fetch(API_URL, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Google Sheets request failed (${response.status})`);
-  const data = await response.json() as { nodes?: SheetPerson[]; links?: Record<string, unknown>[] };
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      const response = await fetch(API_URL, { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json() as { nodes?: SheetPerson[]; links?: Record<string, unknown>[] };
+        return parseGoogleSheetGraph(data);
+      }
+      lastError = new GoogleSheetRequestError(response.status);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < MAX_RETRIES) await new Promise(resolve => window.setTimeout(resolve, RETRY_DELAY_MS * 2 ** attempt));
+  }
+  throw lastError instanceof Error ? lastError : new GoogleSheetRequestError();
+}
+
+function parseGoogleSheetGraph(data: { nodes?: SheetPerson[]; links?: Record<string, unknown>[] }): FamilyGraph {
   const graph = {
     people: (data.nodes ?? []).map(toPerson),
     relationships: (data.links ?? []).map(link => ({

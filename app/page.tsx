@@ -6,7 +6,15 @@ import { ageLabel, currentHebrewMonth, descendants, isBirthdayInCurrentHebrewMon
 
 type PersonStats = { children: number; descendants: number };
 type RelationshipDetails = { hebrewMarriageDate?: string };
-import { fetchGoogleSheetGraph, saveGoogleSheetGraph } from "@/lib/google-sheet";
+import { fetchGoogleSheetGraph, GoogleSheetRequestError, saveGoogleSheetGraph } from "@/lib/google-sheet";
+
+function friendlyGraphLoadError(error: unknown): string {
+  if (error instanceof GoogleSheetRequestError) {
+    if (error.status === 404) return "מקור הנתונים לא נמצא כרגע. נסו לרענן את הדף בעוד כמה רגעים.";
+    if (error.status === 503) return "מקור הנתונים אינו מוגדר כרגע. נסו שוב מאוחר יותר.";
+  }
+  return "לא הצלחנו לטעון את עץ המשפחה כרגע. נסו לרענן את הדף בעוד כמה רגעים.";
+}
 
 const hebrewBirthMonths = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר א׳", "אדר ב׳", "ניסן", "אייר", "סיוון", "תמוז", "אב", "אלול"];
 const hebrewDateYears = Array.from({ length: 151 }, (_, index) => 5700 + index);
@@ -286,13 +294,15 @@ function NewEntityPanel({ onClose, onCreate }: { onClose: () => void; onCreate: 
 }
 
 export default function HomePage() {
+  const [, refreshDate] = useState(() => Date.now());
   const [menuOpen, setMenuOpen] = useState(false);
   const [newEntityOpen, setNewEntityOpen] = useState(false); const [managePasswordOpen, setManagePasswordOpen] = useState(false);
   const [graph, setGraph] = useState<FamilyGraph | null>(null); const [selectedId, setSelectedId] = useState<string | null>(null); const [addMemberForId, setAddMemberForId] = useState<string | null>(null); const [spouseFocusId, setSpouseFocusId] = useState<string | null>(null); const [query, setQuery] = useState(""); const [filter, setFilter] = useState<string | null>(null); const [canEdit, setCanEdit] = useState(false); const [scale, setScaleState] = useState(1); const setScale: React.Dispatch<React.SetStateAction<number>> = updater => setScaleState(current => { const next = typeof updater === "function" ? updater(current) : updater; const accelerated = typeof updater === "function" && next === 12 && current >= 11.1 ? current + .9 : typeof updater === "function" && Math.abs(next - current) <= .9 ? current + (next - current) * 2 : next; return Math.max(.4, Math.min(20, accelerated)); }); const [offset, setOffset] = useState({ x: 0, y: 0 }); const [viewportWidth, setViewportWidth] = useState(1200); const [loadError, setLoadError] = useState<string | null>(null); const svgRef = useRef<SVGSVGElement>(null); const didDrag = useRef(false); const didInitialFocus = useRef(false); const pointers = useRef(new Map<number, { x: number; y: number }>()); const panStart = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null); const pinchStart = useRef<{ distance: number; scale: number } | null>(null);
+  useEffect(() => { const timer = window.setInterval(() => refreshDate(Date.now()), 60_000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const updateViewportWidth = () => setViewportWidth(window.innerWidth); updateViewportWidth(); window.addEventListener("resize", updateViewportWidth); return () => window.removeEventListener("resize", updateViewportWidth); }, []);
   useEffect(() => { const openAddMember = (event: Event) => { if (canEdit) setAddMemberForId((event as CustomEvent<string>).detail); }; window.addEventListener("family:add-member", openAddMember); return () => window.removeEventListener("family:add-member", openAddMember); }, [canEdit]);
   useEffect(() => { document.body.dataset.familyEdit = String(canEdit); return () => { delete document.body.dataset.familyEdit; }; }, [canEdit]);
-  useEffect(() => { fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(error instanceof Error ? error.message : "Unable to load Google Sheets data")); }, []);
+  useEffect(() => { fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(friendlyGraphLoadError(error))); }, []);
   useEffect(() => {
     if (!graph || didInitialFocus.current) return;
     const person = graph.people.find(candidate => candidate.name.trim() === "יצחק אילון");

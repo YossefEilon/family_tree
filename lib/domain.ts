@@ -73,8 +73,26 @@ function normalizeHebrewDate(value: string): string {
 }
 
 export function currentHebrewMonth(date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("he-u-ca-hebrew", { month: "long" }).formatToParts(date);
+  const jerusalemDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const datePart = (type: string) => Number(jerusalemDate.find(part => part.type === type)?.value);
+  const sunset = jerusalemSunsetUtc(datePart("year"), datePart("month"), datePart("day"));
+  const hebrewDate = date >= sunset ? new Date(date.getTime() + 24 * 60 * 60 * 1000) : date;
+  const parts = new Intl.DateTimeFormat("he-u-ca-hebrew", { month: "long", timeZone: "Asia/Jerusalem" }).formatToParts(hebrewDate);
   return parts.find(part => part.type === "month")?.value ?? "";
+}
+
+// Hebrew dates begin at sunset. This uses the NOAA solar-position approximation
+// for Jerusalem, avoiding a network dependency.
+function jerusalemSunsetUtc(year: number, month: number, day: number): Date {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const dayOfYear = Math.floor((date.getTime() - Date.UTC(year, 0, 0)) / 86400000);
+  const gamma = (2 * Math.PI / 365) * (dayOfYear - 1);
+  const equationOfTime = 229.18 * (0.000075 + 0.001868 * Math.cos(gamma) - 0.032077 * Math.sin(gamma) - 0.014615 * Math.cos(2 * gamma) - 0.040849 * Math.sin(2 * gamma));
+  const declination = 0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma) - 0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma) - 0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma);
+  const latitude = 31.7683 * Math.PI / 180;
+  const hourAngle = Math.acos(Math.cos(90.833 * Math.PI / 180) / (Math.cos(latitude) * Math.cos(declination)) - Math.tan(latitude) * Math.tan(declination)) * 180 / Math.PI;
+  const sunsetMinutesUtc = 720 - 4 * 35.2137 - equationOfTime + 4 * hourAngle;
+  return new Date(date.getTime() + sunsetMinutesUtc * 60000);
 }
 
 export function hebrewMonthOf(dateValue: string | undefined): string | undefined {
