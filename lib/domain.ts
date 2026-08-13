@@ -56,7 +56,7 @@ export function ageOf(person: Person, year = new Date().getFullYear()): number |
   return Math.floor(Math.max(0, (person.deathYear ?? year) - person.birthYear));
 }
 
-export function ageLabel(person: Person, date = new Date()): string | undefined {
+function legacyAgeLabel(person: Person, date = new Date()): string | undefined {
   const age = ageOf(person, date.getFullYear());
   if (age === undefined) return undefined;
   if (age > 0) return `${age} שנים`;
@@ -70,6 +70,65 @@ const hebrewMonths = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", 
 
 function normalizeHebrewDate(value: string): string {
   return value.replace(/[״“”\"׳’']/g, "").replace(/\s+/g, " ").trim();
+}
+
+const hebrewNumeralValues: Record<string, number> = {
+  א: 1, ב: 2, ג: 3, ד: 4, ה: 5, ו: 6, ז: 7, ח: 8, ט: 9, י: 10,
+  כ: 20, ך: 20, ל: 30, מ: 40, ם: 40, נ: 50, ן: 50, ס: 60, ע: 70,
+  פ: 80, ף: 80, צ: 90, ץ: 90, ק: 100, ר: 200, ש: 300, ת: 400,
+};
+
+function hebrewNumeralValue(value: string, isYear = false): number | undefined {
+  const normalized = value.replace(/[׳״'"\s]/g, "");
+  if (/^\d+$/.test(normalized)) return Number(normalized);
+  const total = [...normalized].reduce((sum, letter) => sum + (hebrewNumeralValues[letter] ?? 0), 0);
+  return total ? (isYear && total < 1000 ? total + 5000 : total) : undefined;
+}
+
+function hebrewDateParts(value: string): { day: number; month: string; year: number } | undefined {
+  const match = value.match(/^(.+?) ב(.+?) (.+)$/);
+  if (!match) return undefined;
+  const day = hebrewNumeralValue(match[1]);
+  const year = hebrewNumeralValue(match[3], true);
+  const month = hebrewMonthOf(value);
+  return day && year && month ? { day, month, year } : undefined;
+}
+
+function currentHebrewDateParts(date: Date): { day: number; month: string; year: number } | undefined {
+  const parts = new Intl.DateTimeFormat("he-u-ca-hebrew", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jerusalem" }).formatToParts(date);
+  const day = Number(parts.find(part => part.type === "day")?.value);
+  const year = Number(parts.find(part => part.type === "year")?.value);
+  const month = parts.find(part => part.type === "month")?.value;
+  return day && year && month ? { day, month, year } : undefined;
+}
+
+function hebrewMonthIndex(month: string): number {
+  const normalized = normalizeHebrewDate(month);
+  return hebrewMonths.findIndex(candidate => normalizeHebrewDate(candidate) === normalized);
+}
+
+export function ageLabel(person: Person, date = new Date()): string | undefined {
+  const birth = person.hebrewBirthDate ? hebrewDateParts(person.hebrewBirthDate) : undefined;
+  const comparisonDate = person.deathYear === undefined ? date : new Date(person.deathYear, 11, 31);
+  const current = birth ? currentHebrewDateParts(comparisonDate) : undefined;
+  if (birth && current) {
+    const birthMonth = hebrewMonthIndex(birth.month);
+    const currentMonth = hebrewMonthIndex(current.month);
+    if (birthMonth >= 0 && currentMonth >= 0) {
+      const birthdayPassed = currentMonth > birthMonth || (currentMonth === birthMonth && current.day >= birth.day);
+      const years = Math.max(0, current.year - birth.year - (birthdayPassed ? 0 : 1));
+      if (years > 0) return `${years} שנים`;
+      const months = Math.max(0, (current.year - birth.year) * 12 + currentMonth - birthMonth - (current.day < birth.day ? 1 : 0));
+      return `${months} חודשים`;
+    }
+  }
+  return legacyAgeLabel(person, date);
+}
+
+export function formatBirthDate(birthDate?: string): string | undefined {
+  if (!birthDate) return undefined;
+  const match = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : birthDate;
 }
 
 export function currentHebrewMonth(date = new Date()): string {

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { calculateFamilyLayout, edgePath, NODE_HEIGHT, NODE_WIDTH } from "@/lib/layout";
-import { ageLabel, currentHebrewMonth, descendants, isBirthdayInCurrentHebrewMonth, spouses, type FamilyGraph, type Person } from "@/lib/domain";
+import { ageLabel, currentHebrewMonth, descendants, formatBirthDate, isBirthdayInCurrentHebrewMonth, spouses, type FamilyGraph, type Person } from "@/lib/domain";
 
 type PersonStats = { children: number; descendants: number };
 type RelationshipDetails = { hebrewMarriageDate?: string };
@@ -136,13 +136,13 @@ function LegacyPersonPanel({ person, stats, marriageDate, onClose, onSave, onFil
         {childrenCount > 0 && <><div className="person-stat"><strong>{childrenCount}</strong><span>{childrenCount === 1 ? "ילד/ה" : "ילדים"}</span></div><div className="person-stat"><strong>{descendantsCount}</strong><span>צאצאים</span></div></>}
       </div>
       <div className="detail-list">
-        {(person.birthYear || person.deathYear) && <div><span>שנים</span><strong>{person.birthYear ?? "?"} – {person.deathYear ?? "היום"}</strong></div>}
         {person.hebrewBirthDate && <div><span>תאריך לידה עברי</span><strong>{person.hebrewBirthDate}</strong></div>}
+        {person.birthDate && <div><span>תאריך לידה לועזי</span><strong dir="ltr">{formatBirthDate(person.birthDate)}</strong></div>}
         {marriageDate && <div><span>יום נישואין</span><strong>{marriageDate}</strong></div>}
         {person.birthCountry && <div><span>מקום לידה</span><strong>{person.birthCountry}</strong></div>}
         {person.previousLastName && <div><span>שם משפחה קודם</span><strong>{person.previousLastName}</strong></div>}
       </div>
-      <section className="story-section"><h4>סיפור חיים</h4><p>{person.lifeStory || "אין עדיין סיפור חיים."}</p></section>
+      {(!person.isAlive || person.lifeStory?.trim()) && <section className="story-section"><h4>סיפור חיים</h4><p>{person.lifeStory || "אין עדיין סיפור חיים."}</p></section>}
       <div className="panel-actions"><button className="button primary" onClick={onFilter}>הצג את המשפחה הקרובה</button><button className="button" onClick={onClose}>סגירה</button></div>
     </div>}
   </div></div>;
@@ -293,6 +293,21 @@ function NewEntityPanel({ onClose, onCreate }: { onClose: () => void; onCreate: 
   </div></div></div>;
 }
 
+function LoadingScreen({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+  return <main className="loading-shell" aria-busy={!error}>
+    <div className={`loading-card${error ? " loading-card-error" : ""}`} role={error ? "alert" : "status"}>
+      <div className="loading-brand" aria-hidden="true"><span className="loading-mark"><span /><span /><span /></span><span className="loading-brand-line" /></div>
+      <p className="loading-eyebrow">סיפור משפחתי שנשמר יחד</p>
+      <h1>{error ? "לא הצלחנו לפתוח את העץ" : "טוענים את עץ המשפחה"}</h1>
+      {error ? <><p className="loading-message">{error}</p><button className="button primary loading-retry" onClick={onRetry}>לנסות שוב</button></> : <>
+        <p className="loading-message">רגע קטן, אנחנו מכינים את הקשרים והסיפורים שלכם.</p>
+        <div className="loading-graph" aria-hidden="true"><span className="loading-line loading-line-one" /><span className="loading-line loading-line-two" /><span className="loading-node loading-node-one" /><span className="loading-node loading-node-two" /><span className="loading-node loading-node-three" /></div>
+        <div className="loading-dots" aria-hidden="true"><span /><span /><span /></div>
+      </>}
+    </div>
+  </main>;
+}
+
 export default function HomePage() {
   const [, refreshDate] = useState(() => Date.now());
   const [menuOpen, setMenuOpen] = useState(false);
@@ -302,7 +317,8 @@ export default function HomePage() {
   useEffect(() => { const updateViewportWidth = () => setViewportWidth(window.innerWidth); updateViewportWidth(); window.addEventListener("resize", updateViewportWidth); return () => window.removeEventListener("resize", updateViewportWidth); }, []);
   useEffect(() => { const openAddMember = (event: Event) => { if (canEdit) setAddMemberForId((event as CustomEvent<string>).detail); }; window.addEventListener("family:add-member", openAddMember); return () => window.removeEventListener("family:add-member", openAddMember); }, [canEdit]);
   useEffect(() => { document.body.dataset.familyEdit = String(canEdit); return () => { delete document.body.dataset.familyEdit; }; }, [canEdit]);
-  useEffect(() => { fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(friendlyGraphLoadError(error))); }, []);
+  const loadGraph = () => { setLoadError(null); void fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(friendlyGraphLoadError(error))); };
+  useEffect(() => { loadGraph(); }, []);
   useEffect(() => {
     if (!graph || didInitialFocus.current) return;
     const person = graph.people.find(candidate => candidate.name.trim() === "יצחק אילון");
@@ -320,7 +336,7 @@ export default function HomePage() {
   const marriageDatesByPerson = useMemo(() => { const dates = new Map<string, string>(); for (const relationship of activeGraph.relationships) { if (relationship.type !== "spouse" || !relationship.hebrewMarriageDate) continue; if (!dates.has(relationship.sourceId)) dates.set(relationship.sourceId, relationship.hebrewMarriageDate); if (!dates.has(relationship.targetId)) dates.set(relationship.targetId, relationship.hebrewMarriageDate); } return dates; }, [activeGraph]);
   const graphForFilter = (rootId: string): FamilyGraph => { const ids = descendants(activeGraph, rootId); spouses(activeGraph, rootId).forEach(id => ids.add(id)); return { people: activeGraph.people.filter(p => ids.has(p.id)), relationships: activeGraph.relationships.filter(r => ids.has(r.sourceId) && ids.has(r.targetId)) }; };
   const layout = useMemo(() => calculateFamilyLayout(filter ? graphForFilter(filter) : activeGraph, viewportWidth), [activeGraph, filter, viewportWidth]);
-  if (!graph) return <main className="app-shell"><div className="panel" style={{ margin: "auto", textAlign: "center" }}>{loadError ? `שגיאה בטעינת הנתונים: ${loadError}` : "טוען את עץ המשפחה…"}</div></main>;
+  if (!graph) return <LoadingScreen error={loadError} onRetry={loadGraph} />;
   const selected = graph.people.find(p => p.id === selectedId); const currentMonth = currentHebrewMonth(); const birthdaysThisMonth = graph.people.filter(person => isBirthdayInCurrentHebrewMonth(person)); const matches = query.length > 1 ? graph.people.filter(p => p.name.includes(query)).slice(0, 6) : []; const highlightedPersonId = spouseFocusId; const highlightedDescendants = highlightedPersonId ? descendants(activeGraph, highlightedPersonId) : new Set<string>();
   const savePerson = (person: Person) => { if (!graph) return; const next = { ...graph, people: graph.people.map(p => p.id === person.id ? person : p) }; setGraph(next); setSelectedId(null); void saveGoogleSheetGraph(next); };
   const deletePerson = (personId: string) => {
