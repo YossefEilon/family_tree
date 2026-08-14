@@ -116,7 +116,8 @@ function PersonCard({ person, stats, selected, canEdit: _canEdit, onClick, onAdd
   const childrenCount = stats.children;
   const descendantsCount = stats.descendants;
   const requestAddMember = () => { if (onAddMember) onAddMember(); else if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("family:add-member", { detail: person.id })); };
-  const status = person.deathYear ? `נפטר/ה בגיל ${ageLabel(person) ?? "לא ידוע"}` : person.isAlive ? (ageLabel(person) ?? "גיל לא ידוע") : "גיל לא ידוע";
+  const isDeceased = !person.isAlive || person.deathYear !== undefined;
+  const status = isDeceased ? `נפטר/ה${person.deathYear !== undefined && ageLabel(person) ? ` בגיל ${ageLabel(person)}` : ""}` : (ageLabel(person) ?? "גיל לא ידוע");
   const familyMeta = childrenCount > 0 ? `${childrenCount} ${childrenCount === 1 ? "ילד/ה" : "ילדים"} · ${descendantsCount} צאצאים` : "";
   const hasBirthdayThisMonth = isBirthdayInCurrentHebrewMonth(person);
   return <g className={`person-card ${selected ? "selected" : ""}`} transform={`translate(${person.x - NODE_WIDTH / 2},${person.y - NODE_HEIGHT / 2})`} onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onClick()}>
@@ -307,10 +308,11 @@ function VerticalFamilyTree({ graph, root, onClose, onSelectPerson }: { graph: F
 
 function LegacyPersonPanel({ person, stats, marriageDate, onClose, onSave, onFilter, onShowLineage, onBack, isFiltered, canEdit }: { person: Person; stats: PersonStats; marriageDate?: string; onClose: () => void; onSave: (p: Person) => void; onFilter: () => void; onShowLineage: () => void; onBack: () => void; isFiltered: boolean; canEdit: boolean }) {
   const [draft, setDraft] = useState(person); const update = (key: keyof Person, value: string | number | boolean | undefined) => setDraft(d => ({ ...d, [key]: value }));
-  const age = ageLabel(person);
   const childrenCount = stats.children;
   const descendantsCount = stats.descendants;
-  const status = person.deathYear ? "נפטר/ה" : person.isAlive ? "" : "סטטוס לא ידוע";
+  const isDeceased = !person.isAlive || person.deathYear !== undefined;
+  const status = isDeceased ? "נפטר/ה" : "";
+  const age = isDeceased && person.deathYear === undefined ? undefined : ageLabel(person);
   return <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>{isBirthdayInCurrentHebrewMonth(person) && <BirthdayBalloons />}<div className="panel"><div className="panel-header"><h2>{canEdit ? "עריכת אדם" : "פרטי אדם"}</h2><button className="button ghost" onClick={onClose} aria-label="סגירה">✕</button></div>
     {canEdit ? <div className="form-grid">
       <label className="field full">שם מלא<input value={draft.name} onChange={e => update("name", e.target.value)} /></label>
@@ -326,15 +328,16 @@ function LegacyPersonPanel({ person, stats, marriageDate, onClose, onSave, onFil
     </div> : <div className="person-details">
       <div className="person-hero">
         <div className="profile-panel">{person.profileImageUrl ? <img src={person.profileImageUrl} alt={`תמונה של ${person.name}`} /> : <span className={`profile-placeholder ${person.gender}`}>{person.name.charAt(0)}</span>}</div>
-        <div className="person-heading">{status && <span className={`status-badge ${person.deathYear ? "deceased" : "alive"}`}>{status}</span>}<h3>{person.name}</h3>{person.role?.trim() && <p>{person.role}</p>}</div>
+        <div className="person-heading">{status && <span className={`status-badge ${isDeceased ? "deceased" : "alive"}`}>{status}</span>}<h3>{person.name}</h3>{person.role?.trim() && <p>{person.role}</p>}</div>
       </div>
       <div className="person-stats" aria-label="נתונים מרכזיים">
-        <div className="person-stat"><strong>{age ?? "—"}</strong><span>{person.deathYear ? "גיל בפטירה" : "גיל"}</span></div>
+        <div className="person-stat"><strong>{age ?? "—"}</strong><span>{isDeceased ? "גיל בפטירה" : "גיל"}</span></div>
         {childrenCount > 0 && <><div className="person-stat"><strong>{childrenCount}</strong><span>{childrenCount === 1 ? "ילד/ה" : "ילדים"}</span></div><div className="person-stat"><strong>{descendantsCount}</strong><span>צאצאים</span></div></>}
       </div>
       <div className="detail-list">
         {person.hebrewBirthDate && <div><span>תאריך לידה עברי</span><strong>{person.hebrewBirthDate}</strong></div>}
         {person.birthDate && <div><span>תאריך לידה לועזי</span><strong dir="ltr">{formatBirthDate(person.birthDate)}</strong></div>}
+        {person.hebrewDeathDate && <div><span>תאריך פטירה עברי</span><strong>{person.hebrewDeathDate}</strong></div>}
         {marriageDate && <div><span>יום נישואין</span><strong>{marriageDate}</strong></div>}
         {person.birthCountry && <div><span>מקום לידה</span><strong>{person.birthCountry}</strong></div>}
         {person.previousLastName && <div><span>שם משפחה קודם</span><strong>{person.previousLastName}</strong></div>}
