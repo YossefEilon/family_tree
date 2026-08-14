@@ -252,18 +252,42 @@ function CumulativeFamilyTree({ graph, root, onClose }: { graph: FamilyGraph; ro
   const rows = new Map<number, Person[]>();
   [...visibleIds].forEach(id => { const person = peopleById.get(id); const level = distance.get(id); if (!person || level === undefined) return; rows.set(level, [...(rows.get(level) ?? []), person]); });
   const sortedLevels = [...rows.keys()].sort((a, b) => a - b);
-  const generationLabel = (level: number) => level === 0 ? "האדם שנבחר" : level < 0 ? `דור ${Math.abs(level)} מעל` : `דור ${level} מתחת`;
+  const generationLabel = (level: number) => level === 0 ? "האדם שנבחר" : level === -1 ? "הורים" : level === 1 ? "ילדים" : level < 0 ? `דור ${Math.abs(level)} מעל` : `דור ${level} מתחת`;
+  const generationCount = sortedLevels.length;
+  const visibleCount = visibleIds.size;
+  const pathIds = new Set<string>([root.id, selectedId]);
+  const pathPrevious = new Map<string, string>();
+  const pathQueue = [root.id];
+  const pathSeen = new Set([root.id]);
+  while (pathQueue.length > 0 && !pathSeen.has(selectedId)) {
+    const id = pathQueue.shift()!;
+    const connected = [...(parents.get(id) ?? []), ...(children.get(id) ?? [])];
+    connected.forEach(nextId => { if (!pathSeen.has(nextId)) { pathSeen.add(nextId); pathPrevious.set(nextId, id); pathQueue.push(nextId); } });
+  }
+  let pathCursor = selectedId;
+  while (pathPrevious.has(pathCursor)) { pathIds.add(pathCursor); pathCursor = pathPrevious.get(pathCursor)!; }
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
   const explore = (personId: string) => {
     const nextVisibleIds = new Set(visibleIdsState);
+    nextVisibleIds.add(root.id);
     nextVisibleIds.add(personId);
-    if ((parents.get(selectedId) ?? []).includes(personId)) (parents.get(personId) ?? []).forEach(parentId => nextVisibleIds.add(parentId));
-    else if ((children.get(selectedId) ?? []).includes(personId)) (children.get(personId) ?? []).forEach(childId => nextVisibleIds.add(childId));
+    (parents.get(personId) ?? []).forEach(parentId => nextVisibleIds.add(parentId));
+    (children.get(personId) ?? []).forEach(childId => nextVisibleIds.add(childId));
     setHistory(previous => [...previous, { visibleIds: new Set(visibleIdsState), selectedId }]);
     setVisibleIdsState(nextVisibleIds);
     setSelectedId(personId);
   };
   const goBack = () => { const previous = history.at(-1); if (!previous) return; setHistory(current => current.slice(0, -1)); setVisibleIdsState(previous.visibleIds); setSelectedId(previous.selectedId); };
-  return <div className="overlay lineage-overlay" role="dialog" aria-modal="true" aria-labelledby="lineage-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel lineage-panel"><div className="panel-header"><div><h2 id="lineage-title">המשפחה המורחבת</h2><p className="lineage-subtitle">בחירת בני משפחה מרחיבה את התצוגה</p></div><div className="lineage-header-actions"><button className="button" disabled={history.length === 0} onClick={goBack}>חזרה</button><button className="button ghost" onClick={onClose} aria-label="סגירה">×</button></div></div><div className="lineage-scroll">{sortedLevels.map(level => <div className="lineage-level" key={level}><span className="lineage-level-label">{generationLabel(level)}</span><div className="lineage-people">{rows.get(level)!.map(person => <button key={person.id} className={`lineage-person ${person.id === selectedId ? "root" : ""}`} onClick={() => explore(person.id)}><span className={`lineage-dot ${person.gender}`} /><span>{person.name}</span>{person.role?.trim() && <small>{person.role}</small>}</button>)}</div></div>)}</div></section></div>;
+  const resetTree = () => { setVisibleIdsState(new Set(initialVisibleIds)); setHistory([]); setSelectedId(root.id); };
+  return <div className="overlay lineage-overlay" role="dialog" aria-modal="true" aria-labelledby="lineage-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel lineage-panel">
+    <div className="lineage-hero"><div className="lineage-hero-mark" aria-hidden="true">✦</div><div><span className="lineage-eyebrow">מפת המשפחה</span><h2 id="lineage-title">המשפחה המורחבת</h2><p className="lineage-subtitle">בחרו אדם כדי לגלות את המעגל המשפחתי סביבו</p></div><div className="lineage-header-actions"><button className="button lineage-back" disabled={history.length === 0} onClick={goBack} aria-label="חזרה לאדם הקודם">↩ <span>חזרה</span></button><button className="button lineage-reset" onClick={resetTree} aria-label="איפוס עץ הדורות">⌂ <span>איפוס</span></button><button className="button ghost lineage-close" onClick={onClose} aria-label="סגירת עץ הדורות">×</button></div></div>
+    <div className="lineage-summary" aria-label="סיכום התצוגה"><div><strong>{generationCount}</strong><span>דורות בתצוגה</span></div><div><strong>{visibleCount}</strong><span>בני משפחה</span></div><div className="lineage-summary-hint"><span className="lineage-pulse" aria-hidden="true" /> <span>נקודת המוצא: <strong>{root.name}</strong></span></div></div>
+    <div className="lineage-scroll">{sortedLevels.map(level => <div className={`lineage-level ${level === 0 ? "current" : ""} ${rows.get(level)!.some(person => pathIds.has(person.id)) ? "lineage-level-path" : ""}`} key={level}><div className="lineage-level-heading"><span className="lineage-level-label">{generationLabel(level)}</span><span className="lineage-level-count">{rows.get(level)!.length} {rows.get(level)!.length === 1 ? "אדם" : "אנשים"}</span></div><div className="lineage-people">{rows.get(level)!.map(person => <button key={person.id} className={`lineage-person ${person.id === root.id ? "anchor" : ""} ${person.id === selectedId ? "root" : ""} ${pathIds.has(person.id) ? "path" : ""}`} onClick={() => explore(person.id)} aria-pressed={person.id === selectedId}><span className={`lineage-avatar ${person.gender}`}>{person.name.trim().charAt(0)}</span><span className="lineage-person-name">{person.name}</span>{person.role?.trim() && <small>{person.role}</small>}{person.id === root.id && <span className="lineage-selected-label">נקודת מוצא</span>}{person.id === selectedId && person.id !== root.id && <span className="lineage-selected-label">נבחר/ה</span>}</button>)}</div></div>)}</div>
+  </section></div>;
 }
 
 function VerticalFamilyTree({ graph, root, onClose, onSelectPerson }: { graph: FamilyGraph; root: Person; onClose: () => void; onSelectPerson: (id: string) => void }) {
