@@ -59,6 +59,26 @@ export function ageOf(person: Person, year = new Date().getFullYear()): number |
   return Math.floor(Math.max(0, (person.deathYear ?? year) - person.birthYear));
 }
 
+function fullDateAgeLabel(person: Person, date: Date): string | undefined {
+  if (!person.birthDate) return undefined;
+  const match = person.birthDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return undefined;
+  const birthYear = Number(match[1]);
+  const birthMonth = Number(match[2]);
+  const birthDay = Number(match[3]);
+  const endDate = person.deathYear === undefined
+    ? date
+    : new Date(person.deathYear, 11, 31);
+  let age = endDate.getFullYear() - birthYear;
+  const birthdayNotReached = endDate.getMonth() + 1 < birthMonth
+    || (endDate.getMonth() + 1 === birthMonth && endDate.getDate() < birthDay);
+  if (birthdayNotReached) age -= 1;
+  age = Math.max(0, age);
+  if (age > 0) return `${age} שנים`;
+  const months = Math.max(0, (endDate.getFullYear() - birthYear) * 12 + endDate.getMonth() + 1 - birthMonth - (endDate.getDate() < birthDay ? 1 : 0));
+  return `${months} חודשים`;
+}
+
 function legacyAgeLabel(person: Person, date = new Date()): string | undefined {
   const age = ageOf(person, date.getFullYear());
   if (age === undefined) return undefined;
@@ -82,7 +102,9 @@ const hebrewNumeralValues: Record<string, number> = {
 };
 
 function hebrewNumeralValue(value: string, isYear = false): number | undefined {
-  const normalized = value.replace(/[׳״'"\s]/g, "");
+  // Use explicit Unicode code points for geresh/gershayim. This also handles
+  // dates copied from Sheets where the punctuation may not be the same glyph.
+  const normalized = value.replace(/[\u05F3\u05F4'"\s]/g, "");
   if (/^\d+$/.test(normalized)) return Number(normalized);
   const total = [...normalized].reduce((sum, letter) => sum + (hebrewNumeralValues[letter] ?? 0), 0);
   return total ? (isYear && total < 1000 ? total + 5000 : total) : undefined;
@@ -111,6 +133,9 @@ function hebrewMonthIndex(month: string): number {
 }
 
 export function ageLabel(person: Person, date = new Date()): string | undefined {
+  const preciseAge = fullDateAgeLabel(person, date);
+  if (preciseAge !== undefined) return preciseAge;
+
   const birth = person.hebrewBirthDate ? hebrewDateParts(person.hebrewBirthDate) : undefined;
   const comparisonDate = person.deathYear === undefined ? date : new Date(person.deathYear, 11, 31);
   const current = birth ? currentHebrewDateParts(comparisonDate) : undefined;
