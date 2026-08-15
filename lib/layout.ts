@@ -7,6 +7,96 @@ export type LayoutResult = { people: PositionedPerson[]; relationships: LayoutRe
 
 type Unit = { people: Person[]; children: Unit[]; parents: Unit[]; level: number; width: number; treeWidth: number; centerX: number };
 
+function assignLevels(units: Unit[]): void {
+  const parent = units.map((_, index) => index);
+  const find = (index: number): number => {
+    while (parent[index] !== index) {
+      parent[index] = parent[parent[index]];
+      index = parent[index];
+    }
+    return index;
+  };
+  const union = (a: number, b: number): boolean => {
+    const rootA = find(a), rootB = find(b);
+    if (rootA === rootB) return false;
+    parent[Math.max(rootA, rootB)] = Math.min(rootA, rootB);
+    return true;
+  };
+  const unitIndex = new Map(units.map((unit, index) => [unit, index]));
+
+  for (let pass = 0; pass < units.length * 2; pass += 1) {
+    let changed = false;
+    const childrenByParentGroup = new Map<number, number[]>();
+    const parentsByChildGroup = new Map<number, number[]>();
+
+    units.forEach(unit => {
+      const parentGroup = find(unitIndex.get(unit)!);
+      unit.children.forEach(child => {
+        const childGroup = find(unitIndex.get(child)!);
+        childrenByParentGroup.set(parentGroup, [...(childrenByParentGroup.get(parentGroup) ?? []), childGroup]);
+      });
+
+      const childGroup = find(unitIndex.get(unit)!);
+      unit.parents.forEach(parentUnit => {
+        const parentGroup = find(unitIndex.get(parentUnit)!);
+        parentsByChildGroup.set(childGroup, [...(parentsByChildGroup.get(childGroup) ?? []), parentGroup]);
+      });
+    });
+
+    for (const childGroups of childrenByParentGroup.values()) {
+      const [first, ...rest] = [...new Set(childGroups)];
+      if (first === undefined) continue;
+      rest.forEach(group => { changed = union(first, group) || changed; });
+    }
+
+    for (const parentGroups of parentsByChildGroup.values()) {
+      const [first, ...rest] = [...new Set(parentGroups)];
+      if (first === undefined) continue;
+      rest.forEach(group => { changed = union(first, group) || changed; });
+    }
+
+    if (!changed) break;
+  }
+
+  const groups = new Map<number, Unit[]>();
+  units.forEach((unit, index) => {
+    const group = find(index);
+    groups.set(group, [...(groups.get(group) ?? []), unit]);
+  });
+
+  const edges = new Map<number, Set<number>>();
+  const incoming = new Map<number, number>();
+  groups.forEach((_, group) => { edges.set(group, new Set()); incoming.set(group, 0); });
+  units.forEach(unit => {
+    const parentGroup = find(unitIndex.get(unit)!);
+    unit.children.forEach(child => {
+      const childGroup = find(unitIndex.get(child)!);
+      if (parentGroup === childGroup || edges.get(parentGroup)!.has(childGroup)) return;
+      edges.get(parentGroup)!.add(childGroup);
+      incoming.set(childGroup, (incoming.get(childGroup) ?? 0) + 1);
+    });
+  });
+
+  const groupLevel = new Map([...groups.keys()].map(group => [group, 0]));
+  const queue = [...groups.keys()].filter(group => (incoming.get(group) ?? 0) === 0).sort((a, b) => a - b);
+  const visited = new Set<number>();
+  while (queue.length) {
+    const group = queue.shift()!;
+    visited.add(group);
+    [...(edges.get(group) ?? [])].sort((a, b) => a - b).forEach(childGroup => {
+      groupLevel.set(childGroup, Math.max(groupLevel.get(childGroup) ?? 0, (groupLevel.get(group) ?? 0) + 1));
+      incoming.set(childGroup, (incoming.get(childGroup) ?? 0) - 1);
+      if ((incoming.get(childGroup) ?? 0) === 0) queue.push(childGroup);
+      queue.sort((a, b) => a - b);
+    });
+  }
+
+  groups.forEach((groupUnits, group) => {
+    const level = visited.has(group) ? groupLevel.get(group) ?? 0 : 0;
+    groupUnits.forEach(unit => { unit.level = level; });
+  });
+}
+
 /** Deterministic family-unit layout: spouses share a row, descendants flow downward. */
 export function calculateFamilyLayout(graph: FamilyGraph, viewportWidth = 1200): LayoutResult {
   const units: Unit[] = [], byPerson = new Map<string, Unit>();
@@ -18,11 +108,13 @@ export function calculateFamilyLayout(graph: FamilyGraph, viewportWidth = 1200):
     const unit: Unit = { people, children: [], parents: [], level: 0, width: people.length * SPOUSE_GAP, treeWidth: 0, centerX: 0 }; people.forEach(p => byPerson.set(p.id, unit)); units.push(unit);
   }
   for (const r of graph.relationships.filter(r => r.type === "parent")) { const parent = byPerson.get(r.sourceId), child = byPerson.get(r.targetId); if (parent && child && parent !== child && !child.parents.includes(parent)) { child.parents.push(parent); parent.children.push(child); } }
-  const roots = units.filter(u => !u.parents.length); const seen = new Set<Unit>();
-  const level = (u: Unit, l: number) => { if (seen.has(u) && u.level >= l) return; u.level = Math.max(u.level, l); seen.add(u); u.children.forEach(c => level(c, u.level + 1)); }; roots.forEach(r => level(r, 0)); units.forEach(u => level(u, u.level));
+  assignLevels(units);
+  const roots = units.filter(u => !u.parents.length);
   const width = (u: Unit): number => { if (!u.children.length) return u.treeWidth = u.width; const children = u.children.filter(c => c.parents[0] === u); const total = children.reduce((n,c) => n + width(c), 0) + Math.max(0, children.length - 1) * 40; return u.treeWidth = Math.max(u.width, total); }; roots.forEach(width);
-  let cursor = 0; const place = (u: Unit, start: number) => { u.centerX = start + u.treeWidth / 2; const children = u.children.filter(c => c.parents[0] === u); let childStart = u.centerX - (children.reduce((n,c) => n + c.treeWidth, 0) + Math.max(0,children.length-1)*40)/2; children.forEach(c => { place(c, childStart); childStart += c.treeWidth + 40; }); };
-  roots.forEach(r => { place(r, cursor); cursor += r.treeWidth + 120; }); units.filter(u => !seen.has(u) || !u.treeWidth).forEach(u => { width(u); place(u, cursor); cursor += u.treeWidth + 120; });
+  const placed = new Set<Unit>();
+  let cursor = 0; const place = (u: Unit, start: number) => { placed.add(u); u.centerX = start + u.treeWidth / 2; const children = u.children.filter(c => c.parents[0] === u); let childStart = u.centerX - (children.reduce((n,c) => n + c.treeWidth, 0) + Math.max(0,children.length-1)*40)/2; children.forEach(c => { place(c, childStart); childStart += c.treeWidth + 40; }); };
+  const placeOnce = (u: Unit, start: number) => { place(u, start); };
+  roots.forEach(r => { placeOnce(r, cursor); cursor += r.treeWidth + 120; }); units.filter(u => !placed.has(u) || !u.treeWidth).forEach(u => { width(u); placeOnce(u, cursor); cursor += u.treeWidth + 120; });
 
   // A child with parents from different family units is initially laid out
   // under the first parent only. Pull each parent toward the centre of its

@@ -44,4 +44,46 @@ describe("deterministic layout", () => {
     expect(Math.max(...parentXs) - Math.min(...parentXs)).toBeLessThanOrEqual(320);
     expect(layout.people.filter(person => person.id !== "child").every(person => person.y < child.y)).toBe(true);
   });
+  it("keeps siblings on the same level even when one sibling has another parent branch", () => {
+    const graph = {
+      people: [
+        { id: "grandparent", familyId: "default", name: "Grandparent", isAlive: true, gender: "neutral" as const },
+        { id: "shared-parent", familyId: "default", name: "Shared parent", isAlive: true, gender: "neutral" as const },
+        { id: "other-parent", familyId: "default", name: "Other parent", isAlive: true, gender: "neutral" as const },
+        { id: "sibling-a", familyId: "default", name: "Sibling A", isAlive: true, gender: "neutral" as const },
+        { id: "sibling-b", familyId: "default", name: "Sibling B", isAlive: true, gender: "neutral" as const },
+      ],
+      relationships: [
+        { familyId: "default", sourceId: "grandparent", targetId: "other-parent", type: "parent" as const },
+        { familyId: "default", sourceId: "shared-parent", targetId: "sibling-a", type: "parent" as const },
+        { familyId: "default", sourceId: "shared-parent", targetId: "sibling-b", type: "parent" as const },
+        { familyId: "default", sourceId: "other-parent", targetId: "sibling-b", type: "parent" as const },
+      ],
+    };
+
+    const layout = calculateFamilyLayout(graph, 1200);
+
+    expect(layout.people.find(person => person.id === "sibling-a")!.y).toBe(layout.people.find(person => person.id === "sibling-b")!.y);
+  });
+  it("keeps parents of partners on the same level", () => {
+    const graph = {
+      people: [
+        { id: "grandparent", familyId: "default", name: "Grandparent", isAlive: true, gender: "neutral" as const },
+        { id: "partner-a-parent", familyId: "default", name: "Partner A parent", isAlive: true, gender: "neutral" as const },
+        { id: "partner-b-parent", familyId: "default", name: "Partner B parent", isAlive: true, gender: "neutral" as const },
+        { id: "partner-a", familyId: "default", name: "Partner A", isAlive: true, gender: "neutral" as const },
+        { id: "partner-b", familyId: "default", name: "Partner B", isAlive: true, gender: "neutral" as const },
+      ],
+      relationships: [
+        { familyId: "default", sourceId: "grandparent", targetId: "partner-a-parent", type: "parent" as const },
+        { familyId: "default", sourceId: "partner-a-parent", targetId: "partner-a", type: "parent" as const },
+        { familyId: "default", sourceId: "partner-b-parent", targetId: "partner-b", type: "parent" as const },
+        { familyId: "default", sourceId: "partner-a", targetId: "partner-b", type: "spouse" as const },
+      ],
+    };
+
+    const layout = calculateFamilyLayout(graph, 1200);
+
+    expect(layout.people.find(person => person.id === "partner-a-parent")!.y).toBe(layout.people.find(person => person.id === "partner-b-parent")!.y);
+  });
 });
