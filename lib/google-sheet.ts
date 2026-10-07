@@ -16,7 +16,7 @@ type SheetPerson = Record<string, unknown>;
 function uniqueRelationships(relationships: FamilyGraph["relationships"]): FamilyGraph["relationships"] {
   const seen = new Set<string>();
   return relationships.filter(link => {
-    const key = `${link.familyId}|${link.sourceId}|${link.targetId}|${link.type}`;
+    const key = `${link.familyId}|${link.sourceId}|${link.targetId}|${link.type}|${link.hebrewMarriageDate ?? ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

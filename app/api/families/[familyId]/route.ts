@@ -17,13 +17,15 @@ export async function PUT(request: Request, context: { params: Promise<{ familyI
   const data = parsed.data;
   await db.$transaction(async (tx) => {
     await tx.person.deleteMany({ where: { familyId } });
-    await tx.person.createMany({ data: data.people.map(({ id: _, ...person }) => ({
+    // The Prisma schema does not store every domain field (e.g. significantDates);
+    // strip unknown keys so createMany never throws on them.
+    await tx.person.createMany({ data: data.people.map(({ id: _, significantDates: _significantDates, ...person }) => ({
       ...person,
       birthDate: person.birthDate ? String(person.birthDate) : null,
       hebrewBirthDate: person.hebrewBirthDate ? String(person.hebrewBirthDate) : null,
       familyId,
     })) });
-    await tx.relationship.createMany({ data: data.relationships.map(({ id: _, ...r }) => ({ ...r, familyId })) });
+    await tx.relationship.createMany({ data: data.relationships.map(({ id: _, hebrewMarriageDate: _hebrewMarriageDate, ...r }) => ({ ...r, familyId })) });
   });
   return NextResponse.json({ ok: true });
 }
