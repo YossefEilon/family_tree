@@ -11,8 +11,9 @@ button { cursor: pointer; }
 .menu-anchor { position: absolute; top: .8rem; left: 1.5rem; z-index: 5; }
 .menu-trigger { min-width: 2.7rem; padding: .55rem .7rem; font-size: 1.25rem; line-height: 1; }
 .menu-panel { position: absolute; top: calc(100% + .45rem); left: 0; width: 17rem; padding: .4rem; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; box-shadow: 0 12px 30px #17203325; }
-.menu-item { display: block; width: 100%; padding: .6rem .75rem; border: 0; border-radius: .55rem; background: transparent; color: var(--ink); text-align: left; font-weight: 600; }
+.menu-item { display: block; width: 100%; padding: .6rem .75rem; border: 0; border-radius: .55rem; background: transparent; color: var(--ink); text-align: right; font-weight: 600; }
 .menu-item:hover { background: #edf1f7; }
+.field-error { margin: .2rem 0 0; color: #b42318; font-size: .85rem; font-weight: 600; }
 .birthday-menu { padding: .55rem .65rem .7rem; border-bottom: 1px solid #e7ebf2; }
 .birthday-menu h2 { margin: 0 0 .45rem; font-size: .95rem; }
 .birthday-list { display: grid; gap: .2rem; }
@@ -121,7 +122,7 @@ body[data-family-edit="true"] .add-member-button { display: block; }
 .detail-list { display: grid; gap: .65rem; margin: 1.25rem 0; }
 .detail-list div { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: .65rem; border-bottom: 1px solid #edf0f5; }
 .detail-list span { color: var(--muted); }
-.detail-list strong { text-align: left; }
+.detail-list strong { text-align: end; }
 .story-section { padding-top: .2rem; }
 .story-section h4 { margin: 0 0 .35rem; font-size: 1rem; }
 .story-section p { margin: 0; color: #4c5970; line-height: 1.7; white-space: pre-wrap; }
@@ -210,8 +211,12 @@ body[data-family-edit="true"] .add-member-button { display: block; }
 .relationship-editor h3 { margin: 0 0 .8rem; font-size: 1rem; }
 .relationship-editor small { color: #137343; }
 .button:disabled { cursor: not-allowed; opacity: .5; }
-.legend { position: absolute; bottom: 1rem; right: 1rem; display: flex; gap: .7rem; padding: .55rem .8rem; background: #ffffffdd; border: 1px solid #e7ebf2; border-radius: .7rem; font-size: .8rem; }
-.legend > span { display: none; }
+.legend { position: absolute; bottom: 1rem; right: 1rem; display: flex; align-items: center; gap: .45rem; padding: .55rem .8rem; background: #ffffffdd; border: 1px solid #e7ebf2; border-radius: .7rem; font-size: .8rem; }
+.legend-dot { font-size: .7rem; }
+.legend-dot.male { color: #4f83cc; }
+.legend-dot.female { color: #df7096; }
+.save-error { position: absolute; top: 1rem; right: 1rem; left: 1rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem .9rem; background: #fef2f2; border: 1px solid #fecdca; border-radius: .8rem; color: #b42318; font-size: .9rem; font-weight: 600; box-shadow: 0 8px 24px #17203318; z-index: 5; }
+.save-error .button { padding: .3rem .6rem; font-size: 1rem; line-height: 1; }
 .status { padding: .25rem .55rem; border-radius: 999px; background: #e8f8ef; color: #137343; font-size: .8rem; font-weight: 700; }
 @media (max-width: 700px) {
   .topbar { align-items: stretch; flex-direction: column; gap: .55rem; padding: .55rem .75rem .55rem 4rem; }
