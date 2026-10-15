@@ -27,7 +27,7 @@ export const personSchema = z.object({
   previousLastName: z.string().optional(), role: z.string().optional(), birthDate: z.string().refine(isValidIsoDate, "תאריך לידה לועזי אינו תקין").optional(), birthYear: z.number().int().optional(),
   hebrewBirthDate: z.string().refine(isValidHebrewBirthDate, "תאריך לידה עברי אינו תקין").optional(), deathYear: z.number().int().optional(), hebrewDeathDate: z.string().optional(), significantDates: z.array(significantDateSchema).optional(),
   isAlive: z.boolean().default(true), gender: z.enum(["male", "female", "neutral"]).default("neutral"),
-  birthCountry: z.string().optional(), lifeStory: z.string().optional(),
+  birthCountry: z.string().optional(), burialPlace: z.string().optional(), lifeStory: z.string().optional(),
   profileImageUrl: z.string().refine(value => {
     if (value.startsWith("data:image/")) return /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value);
     try { return new URL(value).protocol === "https:" || new URL(value).protocol === "http:"; } catch { return false; }
