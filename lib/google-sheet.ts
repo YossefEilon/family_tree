@@ -1,4 +1,4 @@
-import { graphSchema, type FamilyGraph, type Person } from "./domain";
+import { personSchema, relationshipSchema, type FamilyGraph, type Person, type Relationship } from "./domain";
 
 const API_URL = "/api/google-sheet";
 const MAX_RETRIES = 3;
@@ -85,28 +85,61 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
   throw lastError instanceof Error ? lastError : new GoogleSheetRequestError();
 }
 
-function parseGoogleSheetGraph(data: { nodes?: SheetPerson[]; links?: Record<string, unknown>[] }): FamilyGraph {
+function toRelationship(link: Record<string, unknown>): Relationship {
+  return {
+    familyId: String(link.familyId ?? "default"),
+    sourceId: String(typeof link.source === "object" ? (link.source as SheetPerson).id : link.source),
+    targetId: String(typeof link.target === "object" ? (link.target as SheetPerson).id : link.target),
+    type: (link.type === "spouse" ? "spouse" : "parent") as "parent" | "spouse",
+    hebrewMarriageDate: String(link.hebrewMarriageDate ?? "") || undefined,
+  };
+}
+
+export function parseGoogleSheetGraph(data: { nodes?: SheetPerson[]; links?: Record<string, unknown>[] }): FamilyGraph {
   // Google Sheets commonly includes empty rows in the exported range.
   // They are not family members and must not be passed to the strict schema.
   const nodes = (data.nodes ?? []).filter(raw => String(raw.id ?? "").trim() && String(raw.name ?? "").trim());
-  const graph = {
-    people: nodes.map(toPerson),
-    relationships: (data.links ?? []).map(link => ({
-      familyId: String(link.familyId ?? "default"), sourceId: String(typeof link.source === "object" ? (link.source as SheetPerson).id : link.source),
-      targetId: String(typeof link.target === "object" ? (link.target as SheetPerson).id : link.target), type: (link.type === "spouse" ? "spouse" : "parent") as "parent" | "spouse",
-      hebrewMarriageDate: String(link.hebrewMarriageDate ?? "") || undefined,
-    })),
-  };
-  const parsed = graphSchema.parse({ ...graph, relationships: uniqueRelationships(graph.relationships) });
-  const relationships = [...parsed.relationships];
-  const hasRelationship = (sourceId: string, targetId: string, type: "parent" | "spouse") => relationships.some(link => link.sourceId === sourceId && link.targetId === targetId && link.type === type);
-  for (const spouse of parsed.relationships.filter(link => link.type === "spouse")) {
-    const sharedChildren = relationships.filter(link => link.type === "parent" && link.sourceId === spouse.sourceId).map(link => link.targetId);
-    for (const childId of sharedChildren) if (!hasRelationship(spouse.targetId, childId, "parent")) relationships.push({ familyId: spouse.familyId, sourceId: spouse.targetId, targetId: childId, type: "parent" });
-    const reverseChildren = relationships.filter(link => link.type === "parent" && link.sourceId === spouse.targetId).map(link => link.targetId);
-    for (const childId of reverseChildren) if (!hasRelationship(spouse.sourceId, childId, "parent")) relationships.push({ familyId: spouse.familyId, sourceId: spouse.sourceId, targetId: childId, type: "parent" });
+  // Validate each row on its own: a single malformed row (bad date, bad image
+  // URL, duplicate id) must never take down the whole tree.
+  const people: Person[] = [];
+  const seenIds = new Set<string>();
+  let skippedPeople = 0;
+  for (const raw of nodes) {
+    const parsed = personSchema.safeParse(toPerson(raw));
+    if (!parsed.success || seenIds.has(parsed.data.id)) {
+      skippedPeople += 1;
+      continue;
+    }
+    seenIds.add(parsed.data.id);
+    people.push(parsed.data);
   }
-  return { ...parsed, relationships: uniqueRelationships(relationships) };
+  const validIds = new Set(people.map(person => person.id));
+  const relationships: Relationship[] = [];
+  let skippedRelationships = 0;
+  for (const link of uniqueRelationships((data.links ?? []).map(toRelationship))) {
+    const parsed = relationshipSchema.safeParse(link);
+    if (!parsed.success || !validIds.has(parsed.data.sourceId) || !validIds.has(parsed.data.targetId)) {
+      skippedRelationships += 1;
+      continue;
+    }
+    relationships.push(parsed.data);
+  }
+  if (people.length === 0) {
+    // Preserve the previous behavior when nothing usable remains: the UI shows its error screen.
+    throw new Error(`Could not parse any people from the sheet data (${skippedPeople} rows skipped)`);
+  }
+  if (skippedPeople > 0 || skippedRelationships > 0) {
+    console.warn(`[family-tree] skipped ${skippedPeople} invalid people and ${skippedRelationships} invalid relationships from the sheet data`);
+  }
+  const allRelationships = [...relationships];
+  const hasRelationship = (sourceId: string, targetId: string, type: "parent" | "spouse") => allRelationships.some(link => link.sourceId === sourceId && link.targetId === targetId && link.type === type);
+  for (const spouse of relationships.filter(link => link.type === "spouse")) {
+    const sharedChildren = allRelationships.filter(link => link.type === "parent" && link.sourceId === spouse.sourceId).map(link => link.targetId);
+    for (const childId of sharedChildren) if (!hasRelationship(spouse.targetId, childId, "parent")) allRelationships.push({ familyId: spouse.familyId, sourceId: spouse.targetId, targetId: childId, type: "parent" });
+    const reverseChildren = allRelationships.filter(link => link.type === "parent" && link.sourceId === spouse.targetId).map(link => link.targetId);
+    for (const childId of reverseChildren) if (!hasRelationship(spouse.sourceId, childId, "parent")) allRelationships.push({ familyId: spouse.sourceId, sourceId: spouse.sourceId, targetId: childId, type: "parent" });
+  }
+  return { people, relationships: uniqueRelationships(allRelationships) };
 }
 
 export async function saveGoogleSheetGraph(graph: FamilyGraph): Promise<void> {
