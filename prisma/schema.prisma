@@ -28,6 +28,7 @@ model Person {
   hebrewBirthDate   String?
   deathYear         Int?
   hebrewDeathDate   String?
+  burialPlace       String?
   isAlive           Boolean        @default(true)
   gender            String         @default("neutral")
   birthCountry      String?
