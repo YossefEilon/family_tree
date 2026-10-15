@@ -62,7 +62,7 @@ function toPerson(raw: SheetPerson): Person {
     significantDates: significantDatesFrom(raw.significantDates),
     isAlive: raw.isAlive === undefined ? !raw.death : Boolean(raw.isAlive),
     gender: raw.gender === "male" || raw.gender === "female" ? raw.gender : "neutral",
-    birthCountry: String(raw.birthCountry ?? "") || undefined, lifeStory: String(raw.lifeStory ?? "") || undefined,
+    birthCountry: String(raw.birthCountry ?? "") || undefined, burialPlace: String(raw.burialPlace ?? "") || undefined, lifeStory: String(raw.lifeStory ?? "") || undefined,
     profileImageUrl: typeof (raw.profileImageUrl ?? raw.profilePic ?? raw.image) === "string" ? String(raw.profileImageUrl ?? raw.profilePic ?? raw.image) || undefined : undefined,
   };
 }
@@ -113,7 +113,7 @@ export async function saveGoogleSheetGraph(graph: FamilyGraph): Promise<void> {
   const nodes = graph.people.map(person => ({
     id: person.id, name: person.name, previousLastName: person.previousLastName ?? "", role: person.role ?? "",
     birth: birthDateForStorage(person.birthDate) || String(person.birthYear ?? ""), birthDate: birthDateForStorage(person.birthDate), hebrewBirthDate: person.hebrewBirthDate ?? "", hebrewDeathDate: person.hebrewDeathDate ?? "", significantDates: person.significantDates, death: person.deathYear?.toString() ?? "", isAlive: person.isAlive,
-    gender: person.gender, birthCountry: person.birthCountry ?? "", lifeStory: person.lifeStory ?? "", profilePic: person.profileImageUrl ?? "", profileImageUrl: person.profileImageUrl ?? "", level: 0,
+    gender: person.gender, birthCountry: person.birthCountry ?? "", burialPlace: person.burialPlace ?? "", lifeStory: person.lifeStory ?? "", profilePic: person.profileImageUrl ?? "", profileImageUrl: person.profileImageUrl ?? "", level: 0,
   }));
   const links = uniqueRelationships(graph.relationships).map(link => ({ source: link.sourceId, target: link.targetId, type: link.type, hebrewMarriageDate: link.hebrewMarriageDate ?? "" }));
   const response = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nodes, links }) });
