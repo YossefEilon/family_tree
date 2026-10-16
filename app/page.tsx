@@ -309,26 +309,30 @@ function HebrewCalendarPanel({
                     </div>
                   </div>
 
-                  {persons.length > 0 && (
-                    <div className="calendar-event-people">
+                  {persons.length > 0 ? (
+                    <div className="calendar-event-actions-bar">
                       {persons.map(person => (
                         <button
                           key={person.id}
                           type="button"
-                          className="calendar-person-chip"
+                          className="calendar-card-action-btn"
                           onClick={() => {
                             onSelectPerson(person.id);
                             onClose();
                           }}
                           title={`פתיחת כרטיס של ${person.name}`}
                         >
-                          <Avatar person={person} size="small" />
-                          <span className="calendar-person-name">{person.name}</span>
-                          <span className="calendar-person-arrow" aria-hidden="true">לכרטיס ↗</span>
+                          <div className="calendar-btn-person-info">
+                            <Avatar person={person} size="small" />
+                            <span className="calendar-btn-person-name">{person.name}</span>
+                          </div>
+                          <span className="calendar-btn-cta">
+                            לכרטיס המלא <span aria-hidden="true">↗</span>
+                          </span>
                         </button>
                       ))}
                     </div>
-                  )}
+                  ) : null}
                 </article>
               );
             })}
