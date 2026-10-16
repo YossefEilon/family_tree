@@ -147,12 +147,13 @@ button { cursor: pointer; }
 
 .search {
   width: 100%;
-  padding: 0.58rem 2.2rem 0.58rem 2rem;
+  min-height: 2.5rem;
+  padding: 0.58rem 2.3rem 0.58rem 2.1rem;
   border: 1px solid var(--line);
   border-radius: 0.85rem;
   background: #f8fafd;
   outline: none;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
@@ -1712,13 +1713,24 @@ img.mobile-avatar { object-fit: cover; }
 
   .toolbar {
     width: 100%;
-    justify-content: space-between;
-    gap: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .search-container {
-    flex: 1;
-    width: auto;
+    width: 100%;
+  }
+
+  .search {
+    min-height: 2.75rem;
+    font-size: 1rem;
+    padding: 0.65rem 2.4rem 0.65rem 2.2rem;
   }
 }
 
@@ -1741,6 +1753,58 @@ img.mobile-avatar { object-fit: cover; }
 
   .btn-label {
     display: none;
+  }
+
+  .toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.35rem;
+  }
+
+  .topbar-actions .button {
+    flex: 1;
+    min-height: 2.35rem;
+    padding: 0.35rem 0.45rem;
+    font-size: 0.82rem;
+  }
+
+  .topbar-actions .help-trigger {
+    flex: 0 0 2.35rem;
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .search-container {
+    width: 100%;
+  }
+
+  .search {
+    min-height: 2.9rem;
+    font-size: 1rem;
+    padding: 0.68rem 2.5rem 0.68rem 2.4rem;
+    border-radius: 0.95rem;
+    border-width: 1.5px;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(23, 32, 51, 0.05);
+  }
+
+  .search-icon {
+    font-size: 1.1rem;
+    right: 0.9rem;
+  }
+
+  .search-clear {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.85rem;
+    left: 0.55rem;
   }
 
   .filter-banner {
