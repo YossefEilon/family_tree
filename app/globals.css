@@ -2619,12 +2619,43 @@ img.mobile-avatar { object-fit: cover; }
   }
 }
 
+.stories-topbar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 1.25rem;
+}
+
+.stories-topbar-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.stories-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .stories-brand {
   display: flex;
   align-items: center;
   gap: 0.8rem;
   text-decoration: none;
   color: inherit;
+}
+
+.flow-tab-full { display: inline; }
+.flow-tab-short { display: none; }
+
+.branch-chips-scroll {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .stories-content-wrap {
@@ -3771,12 +3802,480 @@ img.mobile-avatar { object-fit: cover; }
   }
 }
 
+/* Responsive Mobile & Tablet Rules */
 @media (max-width: 880px) {
   .hero-grid,
   .convergence-banner,
-  .storyboard,
-  .geo-layout,
   .etymology-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stories-content-wrap {
+    width: calc(100% - 24px);
+    padding: 16px 0 60px;
+  }
+
+  /* Storyboard on tablet/mobile: horizontal scrollable chapter bar on top */
+  .storyboard {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .chapter-list {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 16px;
+    width: 100%;
+  }
+
+  .chapter-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chapter-btn {
+    flex: 0 0 170px;
+    max-width: 190px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .chapter-btn small {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+
+  .chapter-btn strong {
+    font-size: 0.85rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Geographic Atlas on tablet/mobile: horizontal stations scroll on top */
+  .geo-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .geo-stations {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    gap: 8px;
+    width: 100%;
+    padding-bottom: 4px;
+  }
+
+  .geo-stations::-webkit-scrollbar {
+    display: none;
+  }
+
+  .geo-btn {
+    flex: 0 0 auto;
+    min-width: 140px;
+    padding: 10px 14px;
+    border-radius: 14px;
+  }
+
+  .geo-btn span:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Stories Topbar on Mobile */
+  .stories-topbar {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .stories-topbar-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .stories-topbar-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .stories-topbar-actions {
+    gap: 0.35rem;
+  }
+
+  .stories-header-export {
+    display: none;
+  }
+
+  .stories-view-switcher {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 2px 0;
+  }
+
+  .stories-view-switcher::-webkit-scrollbar {
+    display: none;
+  }
+
+  .stories-view-switcher .view-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.78rem;
+  }
+
+  /* Sticky Story Flow Navigation */
+  .flow-nav {
+    top: 0;
+    padding: 6px 8px;
+    border-radius: 14px;
+    margin-bottom: 18px;
+    flex-wrap: nowrap;
+  }
+
+  .flow-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .flow-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .flow-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 6px 10px;
+    min-height: 34px;
+    font-size: 0.8rem;
+    border-radius: 10px;
+  }
+
+  .flow-tab-full { display: none; }
+  .flow-tab-short { display: inline; }
+  .flow-step-num { width: 18px; height: 18px; font-size: 0.7rem; }
+
+  /* Hero Section on Phone */
+  .story-hero {
+    padding: 16px 14px;
+    border-radius: 18px;
+    margin-bottom: 16px;
+  }
+
+  .hero-badge {
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    margin-bottom: 8px;
+  }
+
+  .story-hero h1 {
+    font-size: 1.35rem;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .story-hero p {
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+
+  .hero-stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .story-stat-box {
+    padding: 6px 8px;
+    border-radius: 8px;
+  }
+
+  .story-stat-box b {
+    font-size: 1.1rem;
+  }
+
+  .story-stat-box span {
+    font-size: 0.68rem;
+  }
+
+  /* Convergence Banner on Phone */
+  .convergence-banner {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .wing-card {
+    padding: 16px 14px;
+    border-radius: 16px;
+  }
+
+  .wing-card h2 {
+    font-size: 1.2rem;
+  }
+
+  .wing-card p {
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .union-bridge {
+    padding: 16px 14px;
+    min-width: 0;
+    border-radius: 16px;
+  }
+
+  .union-bridge strong {
+    font-size: 1.1rem;
+  }
+
+  .union-bridge span {
+    font-size: 0.78rem;
+  }
+
+  .union-bridge p {
+    font-size: 0.8rem !important;
+  }
+
+  /* Portraits on Phone */
+  .portraits-strip {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .portrait-pill {
+    padding: 8px 10px;
+    gap: 10px;
+    border-radius: 12px;
+  }
+
+  .portrait-pill img {
+    width: 44px;
+    height: 44px;
+    border-width: 1.5px;
+  }
+
+  .portrait-pill div strong {
+    font-size: 0.88rem;
+  }
+
+  .portrait-pill div span {
+    font-size: 0.72rem;
+  }
+
+  /* Chapter Stage on Phone */
+  .chapter-stage {
+    padding: 16px 12px;
+    border-radius: 16px;
+  }
+
+  .chapter-stage h3 {
+    font-size: 1.15rem;
+    line-height: 1.3;
+    margin-bottom: 10px;
+  }
+
+  .chapter-stage p {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin-bottom: 10px;
+  }
+
+  .stage-quote {
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    margin: 12px 0;
+    border-right-width: 3px;
+  }
+
+  .stage-highlights {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-top: 14px;
+    padding-top: 12px;
+  }
+
+  .hi-box {
+    padding: 8px 10px;
+  }
+
+  .stage-nav {
+    margin-top: 14px;
+    padding-top: 10px;
+  }
+
+  .stage-nav-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    min-height: 34px;
+  }
+
+  /* Geographic Detail on Phone */
+  .geo-detail {
+    padding: 16px 12px;
+    border-radius: 16px;
+  }
+
+  .geo-detail h3 {
+    font-size: 1.2rem;
+  }
+
+  .geo-detail p {
+    font-size: 0.86rem;
+  }
+
+  /* Names Lab on Phone */
+  .names-lab {
+    padding: 16px 12px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+
+  .names-lab h3 {
+    font-size: 1.15rem;
+  }
+
+  .name-selectors {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    margin: 10px 0 14px;
+  }
+
+  .name-selectors::-webkit-scrollbar {
+    display: none;
+  }
+
+  .name-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    min-height: 32px;
+  }
+
+  .chain-flow {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .chain-node {
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .chain-node small {
+    font-size: 0.7rem;
+  }
+
+  .chain-node strong {
+    font-size: 0.88rem;
+  }
+
+  .chain-node span {
+    font-size: 0.76rem;
+  }
+
+  /* Roster Filter on Phone */
+  .story-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+
+  .story-search-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    font-size: 0.86rem;
+  }
+
+  .branch-chips-scroll {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    width: 100%;
+    padding-bottom: 2px;
+  }
+
+  .branch-chips-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .branch-chip {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 5px 10px;
+    font-size: 0.76rem;
+    min-height: 30px;
+  }
+
+  .roster-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .member-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .member-top h4 {
+    font-size: 0.98rem;
+  }
+
+  .member-dates {
+    font-size: 0.76rem;
+    margin-bottom: 6px;
+  }
+
+  .member-bio {
+    font-size: 0.82rem;
+    margin-bottom: 8px;
+  }
+
+  /* Modals on Phone */
+  .stories-modal-backdrop {
+    padding: 10px;
+  }
+
+  .stories-modal-card {
+    padding: 16px 14px;
+    border-radius: 16px;
+    max-height: 92dvh;
   }
 }

@@ -200,16 +200,66 @@ export default function StoriesPage() {
     <div className="stories-shell" dir="rtl" lang="he">
       {/* Top Header Navigation */}
       <header className="stories-topbar">
-        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", flexWrap: "wrap" }}>
-          <Link href="/" className="stories-brand">
-            <span style={{ fontSize: "1.6rem" }}>🌳</span>
-            <div>
-              <strong style={{ fontSize: "1.12rem", display: "block", color: "var(--ink)" }}>משפחת אילון</strong>
-              <small style={{ fontSize: "0.78rem", color: "var(--muted)" }}>מסע השורשים — שושלות אלבז ואמזלג</small>
-            </div>
-          </Link>
+        <div className="stories-topbar-nav">
+          <div className="stories-topbar-header-row">
+            <Link href="/" className="stories-brand">
+              <span style={{ fontSize: "1.5rem" }}>🌳</span>
+              <div>
+                <strong style={{ fontSize: "1.05rem", display: "block", color: "var(--ink)", lineHeight: 1.2 }}>משפחת אילון</strong>
+                <small style={{ fontSize: "0.75rem", color: "var(--muted)" }}>מסע השורשים</small>
+              </div>
+            </Link>
 
-          <nav className="view-switcher" aria-label="ניווט באפליקציה">
+            <div className="stories-topbar-actions">
+              {canEdit && (
+                <>
+                  <span className="edit-badge">עריכה</span>
+                  {hasUnsavedChanges && (
+                    <button
+                      type="button"
+                      className="button primary"
+                      style={{ padding: "0.35rem 0.65rem", fontSize: "0.8rem", minHeight: "32px" }}
+                      onClick={handleSaveChanges}
+                      disabled={isSaving}
+                      title="שמירת כל השינויים שבוצעו"
+                    >
+                      💾 {isSaving ? "שומר..." : "שמור"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button ghost"
+                    style={{ padding: "0.35rem 0.55rem", fontSize: "0.78rem", minHeight: "32px" }}
+                    onClick={handleResetData}
+                    title="איפוס לגרסת המקור"
+                  >
+                    🔄
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                className={`button ${canEdit ? "danger" : "ghost"}`}
+                style={{ padding: "0.35rem 0.65rem", fontSize: "0.82rem", minHeight: "32px" }}
+                onClick={() => (canEdit ? handleLeaveEdit() : setManagePasswordOpen(true))}
+                title={canEdit ? "יציאה ממצב עריכה" : "עריכת סיפורי המשפחה באמצעות סיסמת מנהל"}
+              >
+                {canEdit ? "יציאה" : "✏️ עריכה"}
+              </button>
+
+              <button
+                type="button"
+                className="embed-trigger stories-header-export"
+                onClick={() => setEmbedModalOpen(true)}
+                title="הטמעה וייצוא JSON של הסיפורים"
+              >
+                ייצוא JSON
+              </button>
+            </div>
+          </div>
+
+          <nav className="view-switcher stories-view-switcher" aria-label="ניווט באפליקציה">
             <Link href="/" className="view-tab">
               🌳 <span>מפת העץ</span>
             </Link>
@@ -223,51 +273,6 @@ export default function StoriesPage() {
               📜 <span>סיפורי המשפחות</span>
             </span>
           </nav>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          {canEdit && (
-            <>
-              <span className="edit-badge">מצב עריכה פעיל</span>
-              {hasUnsavedChanges && (
-                <button
-                  type="button"
-                  className="button primary"
-                  onClick={handleSaveChanges}
-                  disabled={isSaving}
-                  title="שמירת כל השינויים שבוצעו"
-                >
-                  💾 {isSaving ? "שומר..." : "שמור שינויים"}
-                </button>
-              )}
-              <button
-                type="button"
-                className="button ghost"
-                onClick={handleResetData}
-                title="איפוס לגרסת המקור"
-              >
-                🔄 איפוס למקור
-              </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            className={`button ${canEdit ? "danger" : "ghost"}`}
-            onClick={() => (canEdit ? handleLeaveEdit() : setManagePasswordOpen(true))}
-            title={canEdit ? "יציאה ממצב עריכה" : "עריכת סיפורי המשפחה באמצעות סיסמת מנהל"}
-          >
-            {canEdit ? "יציאה מעריכה" : "✏️ עריכה"}
-          </button>
-
-          <button
-            type="button"
-            className="embed-trigger"
-            onClick={() => setEmbedModalOpen(true)}
-            title="הטמעה וייצוא JSON של הסיפורים"
-          >
-            הטמעה וייצוא JSON
-          </button>
         </div>
       </header>
 
@@ -326,7 +331,9 @@ export default function StoriesPage() {
               role="tab"
               aria-selected={activeTab === "overview"}
             >
-              <span className="flow-step-num">1</span> מפגש השושלות
+              <span className="flow-step-num">1</span>
+              <span className="flow-tab-full">מפגש השושלות</span>
+              <span className="flow-tab-short">מפגש</span>
             </button>
             <button
               type="button"
@@ -335,7 +342,9 @@ export default function StoriesPage() {
               role="tab"
               aria-selected={activeTab === "elbaz"}
             >
-              <span className="flow-step-num">2</span> סיפור משפחת אלבז וזנו
+              <span className="flow-step-num">2</span>
+              <span className="flow-tab-full">סיפור משפחת אלבז וזנו</span>
+              <span className="flow-tab-short">אלבז וזנו</span>
             </button>
             <button
               type="button"
@@ -344,7 +353,9 @@ export default function StoriesPage() {
               role="tab"
               aria-selected={activeTab === "amzalag"}
             >
-              <span className="flow-step-num">3</span> סיפור משפחת אמזלג ושריקי
+              <span className="flow-step-num">3</span>
+              <span className="flow-tab-full">סיפור משפחת אמזלג ושריקי</span>
+              <span className="flow-tab-short">אמזלג ושריקי</span>
             </button>
             <button
               type="button"
@@ -353,7 +364,9 @@ export default function StoriesPage() {
               role="tab"
               aria-selected={activeTab === "atlas"}
             >
-              <span className="flow-step-num">4</span> אטלס הקהילות והקברים
+              <span className="flow-step-num">4</span>
+              <span className="flow-tab-full">אטלס הקהילות והקברים</span>
+              <span className="flow-tab-short">אטלס קהילות</span>
             </button>
             <button
               type="button"
@@ -362,7 +375,9 @@ export default function StoriesPage() {
               role="tab"
               aria-selected={activeTab === "generations"}
             >
-              <span className="flow-step-num">5</span> גשר הדורות והשמות
+              <span className="flow-step-num">5</span>
+              <span className="flow-tab-full">גשר הדורות והשמות</span>
+              <span className="flow-tab-short">דורות ושמות</span>
             </button>
           </div>
         </nav>
@@ -962,38 +977,40 @@ export default function StoriesPage() {
                 onChange={(e) => setRosterSearch(e.target.value)}
                 aria-label="חיפוש דמות"
               />
-              <button
-                type="button"
-                className={`branch-chip ${branchFilter === "all" ? "active" : ""}`}
-                onClick={() => setBranchFilter("all")}
-                aria-pressed={branchFilter === "all"}
-              >
-                כל הענפים ({data.peopleRoster.length})
-              </button>
-              <button
-                type="button"
-                className={`branch-chip ${branchFilter === "elbaz" ? "active" : ""}`}
-                onClick={() => setBranchFilter("elbaz")}
-                aria-pressed={branchFilter === "elbaz"}
-              >
-                אלבז וזנו
-              </button>
-              <button
-                type="button"
-                className={`branch-chip ${branchFilter === "amzalag" ? "active" : ""}`}
-                onClick={() => setBranchFilter("amzalag")}
-                aria-pressed={branchFilter === "amzalag"}
-              >
-                אמזלג ושריקי
-              </button>
-              <button
-                type="button"
-                className={`branch-chip ${branchFilter === "eilon" ? "active" : ""}`}
-                onClick={() => setBranchFilter("eilon")}
-                aria-pressed={branchFilter === "eilon"}
-              >
-                דור האיחוד (אילון)
-              </button>
+              <div className="branch-chips-scroll">
+                <button
+                  type="button"
+                  className={`branch-chip ${branchFilter === "all" ? "active" : ""}`}
+                  onClick={() => setBranchFilter("all")}
+                  aria-pressed={branchFilter === "all"}
+                >
+                  כל הענפים ({data.peopleRoster.length})
+                </button>
+                <button
+                  type="button"
+                  className={`branch-chip ${branchFilter === "elbaz" ? "active" : ""}`}
+                  onClick={() => setBranchFilter("elbaz")}
+                  aria-pressed={branchFilter === "elbaz"}
+                >
+                  אלבז וזנו
+                </button>
+                <button
+                  type="button"
+                  className={`branch-chip ${branchFilter === "amzalag" ? "active" : ""}`}
+                  onClick={() => setBranchFilter("amzalag")}
+                  aria-pressed={branchFilter === "amzalag"}
+                >
+                  אמזלג ושריקי
+                </button>
+                <button
+                  type="button"
+                  className={`branch-chip ${branchFilter === "eilon" ? "active" : ""}`}
+                  onClick={() => setBranchFilter("eilon")}
+                  aria-pressed={branchFilter === "eilon"}
+                >
+                  דור האיחוד (אילון)
+                </button>
+              </div>
 
               {canEdit && (
                 <button
