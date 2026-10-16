@@ -198,43 +198,44 @@ function PersonCard({ person, stats, selected, canEdit, onClick, onAddMember }: 
   const descendantsCount = stats.descendants;
   const requestAddMember = () => { if (onAddMember) onAddMember(); else if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("family:add-member", { detail: person.id })); };
   const isDeceased = !person.isAlive || person.deathYear !== undefined;
-  const status = isDeceased ? `נפטר/ה${person.deathYear !== undefined && ageLabel(person) ? ` (${ageLabel(person)})` : ""}` : (ageLabel(person) ?? "");
+  const status = isDeceased ? `🕯️ נפטר/ה${person.deathYear !== undefined && ageLabel(person) ? ` (${ageLabel(person)})` : ""}` : (ageLabel(person) ?? "");
   const yearsText = person.birthYear ? `${person.birthYear}${person.deathYear ? `–${person.deathYear}` : ""}` : "";
-  const statusLine = [status, yearsText].filter(Boolean).join(" · ") || "לחצו לפרטים";
-  const familyMeta = childrenCount > 0 ? `${childrenCount} ${childrenCount === 1 ? "ילד/ה" : "ילדים"}${descendantsCount > childrenCount ? ` · ${descendantsCount} צאצאים` : ""}` : "לחיצה לפתיחת כרטיס";
+  const statusLine = [status, yearsText].filter(Boolean).join(" · ") || "לחצו לצפייה בכרטיס";
+  const familyMeta = childrenCount > 0 ? `👶 ${childrenCount} ${childrenCount === 1 ? "ילד/ה" : "ילדים"}${descendantsCount > childrenCount ? ` · ${descendantsCount} צאצאים` : ""}` : "לחיצה לכרטיס מלא ←";
   const hasBirthdayThisMonth = isBirthdayInCurrentHebrewMonth(person);
-  const displayName = person.name.length > 19 ? `${person.name.slice(0, 18)}…` : person.name;
+  const displayName = person.name.length > 18 ? `${person.name.slice(0, 17)}…` : person.name;
+  const subTitle = person.role?.trim() ? person.role : person.previousLastName ? `לבית ${person.previousLastName}` : "";
+  const displaySubTitle = subTitle.length > 22 ? `${subTitle.slice(0, 21)}…` : subTitle;
   const showAddButton = Boolean(canEdit);
   const initial = person.name.trim().charAt(0) || "?";
 
-  // RTL layout: Avatar on the right (x=192..236), text aligned right from x=180
   return <g className={`person-card ${selected ? "selected" : ""} ${isDeceased ? "deceased" : ""}`} transform={`translate(${person.x - NODE_WIDTH / 2},${person.y - NODE_HEIGHT / 2})`} onClick={onClick} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}>
     <rect className="person-card-bg" width={NODE_WIDTH} height={NODE_HEIGHT} rx="18" />
-    <path className={`person-card-accent ${person.gender}`} d="M 18 2 H 232 A 16 16 0 0 1 248 18 V 22 H 2 V 18 A 16 16 0 0 1 18 2 Z" />
+    <path className={`person-card-accent ${person.gender}`} d="M 18 2 H 232 A 16 16 0 0 1 248 18 V 12 H 2 V 18 A 16 16 0 0 1 18 2 Z" />
+    <path className="person-card-footer-bg" d="M 2 92 H 248 V 114 A 16 16 0 0 1 232 130 H 18 A 16 16 0 0 1 2 114 Z" />
     {hasBirthdayThisMonth && <g className="birthday-card-balloons" aria-hidden="true">
       <g className="card-balloon card-balloon-pink"><ellipse cx="218" cy="20" rx="7" ry="9" /><path d="M218 29v18" /></g>
       <g className="card-balloon card-balloon-blue"><ellipse cx="235" cy="31" rx="7" ry="9" /><path d="M235 40v15" /></g>
       <g className="card-balloon card-balloon-yellow"><ellipse cx="202" cy="35" rx="7" ry="9" /><path d="M202 44v12" /></g>
     </g>}
+    <circle className={`person-card-ring ${person.gender}`} cx="39" cy="48" r="24" />
     {person.profileImageUrl ? (
-      <image className="profile-image" href={person.profileImageUrl} x="16" y="16" width="46" height="46" preserveAspectRatio="xMidYMid slice" />
+      <image className="profile-image" href={person.profileImageUrl} x="17" y="26" width="44" height="44" preserveAspectRatio="xMidYMid slice" />
     ) : (
       <g>
-        <circle className={`dot ${person.gender}`} cx="39" cy="39" r="21" />
-        <text className="avatar-initial" x="39" y="45" textAnchor="middle">{initial}</text>
+        <circle className={`dot ${person.gender}`} cx="39" cy="48" r="21" />
+        <text className="avatar-initial" x="39" y="54" textAnchor="middle">{initial}</text>
       </g>
     )}
-    <text className="name" x="70" y="38" textAnchor="start" direction="ltr" unicodeBidi="plaintext"><title>{person.name}</title>{displayName}</text>
-    {person.role?.trim() ? (
-      <text className="meta role" x="70" y="56" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{person.role}</text>
-    ) : person.previousLastName ? (
-      <text className="meta" x="70" y="56" textAnchor="start" direction="ltr" unicodeBidi="plaintext">לבית {person.previousLastName}</text>
+    <text className="name" x="72" y="38" textAnchor="start" direction="ltr" unicodeBidi="plaintext"><title>{person.name}</title>{displayName}</text>
+    {displaySubTitle ? (
+      <text className={`meta ${person.role?.trim() ? "role" : ""}`} x="72" y="56" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{displaySubTitle}</text>
     ) : null}
-    <text className="meta" x="18" y="86" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{statusLine}</text>
-    <line x1="16" y1="96" x2="234" y2="96" stroke="#edf1f7" strokeWidth="1" />
-    {hasBirthdayThisMonth && <g className="birthday-badge"><title>יום הולדת בחודש העברי הנוכחי</title><rect x="156" y="100" width="78" height="24" rx="12" /><text x="195" y="116" textAnchor="middle">🎂 החודש</text></g>}
-    {!showAddButton && <text className="meta family-meta" x="18" y="116" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{familyMeta}</text>}
-    {showAddButton && <g className="add-member-button" role="button" tabIndex={0} onClick={event => { event.stopPropagation(); requestAddMember(); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); requestAddMember(); } }}><rect x="18" y="101" width="112" height="24" rx="8" /><text x="74" y="117" textAnchor="middle">+ הוספת קשר</text></g>}
+    <text className="meta status-line" x="72" y={displaySubTitle ? "74" : "60"} textAnchor="start" direction="ltr" unicodeBidi="plaintext">{statusLine}</text>
+    <line x1="12" y1="92" x2="238" y2="92" stroke="#e6ecf5" strokeWidth="1" />
+    {hasBirthdayThisMonth && <g className="birthday-badge"><title>יום הולדת בחודש העברי הנוכחי</title><rect x="158" y="99" width="78" height="24" rx="12" /><text x="197" y="115" textAnchor="middle">🎂 החודש</text></g>}
+    {!showAddButton && <text className={`meta family-meta ${childrenCount > 0 ? "has-children" : ""}`} x="16" y="115" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{familyMeta}</text>}
+    {showAddButton && <g className="add-member-button" role="button" tabIndex={0} onClick={event => { event.stopPropagation(); requestAddMember(); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); requestAddMember(); } }}><rect x="14" y="99" width="110" height="24" rx="12" /><text x="69" y="115" textAnchor="middle">+ הוספת קשר</text></g>}
   </g>;
 }
 
@@ -825,6 +826,7 @@ function ProfileViewPanel({
   return <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="person-profile-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>
     {hasBirthday && <BirthdayBalloons />}
     <div className="panel profile-modal">
+      <div className={`profile-hero-banner ${person.gender}`} aria-hidden="true" />
       <div className="profile-modal-topbar">
         <div className="profile-modal-badges">
           <span className={`status-badge ${isDeceased ? "deceased" : "alive"}`}>{status}</span>
@@ -904,16 +906,58 @@ function ProfileViewPanel({
           </div>
         </div>
 
-        <div className="detail-list">
-          {person.hebrewBirthDate && <div><span>תאריך לידה עברי</span><strong>{person.hebrewBirthDate}</strong></div>}
-          {person.birthDate && <div><span>תאריך לידה לועזי</span><strong dir="ltr">{formatBirthDate(person.birthDate)}</strong></div>}
-          {!person.birthDate && person.birthYear && <div><span>שנת לידה</span><strong>{person.birthYear}</strong></div>}
-          {person.hebrewDeathDate && <div><span>תאריך פטירה עברי</span><strong>{person.hebrewDeathDate}</strong></div>}
-          {person.deathYear && <div><span>שנת פטירה</span><strong>{person.deathYear}</strong></div>}
-          {marriageDate && <div><span>יום נישואין עברי</span><strong>{marriageDate}</strong></div>}
-          {person.birthCountry && <div><span>מקום לידה</span><strong>{person.birthCountry}</strong></div>}
-          {person.burialPlace && <div><span>מקום קבורה</span><strong>{person.burialPlace}</strong></div>}
-        </div>
+        {(person.hebrewBirthDate || person.birthDate || person.birthYear || person.hebrewDeathDate || person.deathYear || marriageDate || person.birthCountry || person.burialPlace) && (
+          <div className="detail-cards-grid">
+            {person.hebrewBirthDate && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">✡️</span>
+                <div><span>תאריך לידה עברי</span><strong>{person.hebrewBirthDate}</strong></div>
+              </div>
+            )}
+            {person.birthDate && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">📅</span>
+                <div><span>תאריך לידה לועזי</span><strong dir="ltr">{formatBirthDate(person.birthDate)}</strong></div>
+              </div>
+            )}
+            {!person.birthDate && person.birthYear && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">📅</span>
+                <div><span>שנת לידה</span><strong>{person.birthYear}</strong></div>
+              </div>
+            )}
+            {marriageDate && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">💍</span>
+                <div><span>יום נישואין עברי</span><strong>{marriageDate}</strong></div>
+              </div>
+            )}
+            {person.hebrewDeathDate && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">🕯️</span>
+                <div><span>תאריך פטירה עברי</span><strong>{person.hebrewDeathDate}</strong></div>
+              </div>
+            )}
+            {person.deathYear && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">🕯️</span>
+                <div><span>שנת פטירה</span><strong>{person.deathYear}</strong></div>
+              </div>
+            )}
+            {person.birthCountry && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">📍</span>
+                <div><span>מקום לידה</span><strong>{person.birthCountry}</strong></div>
+              </div>
+            )}
+            {person.burialPlace && (
+              <div className="detail-card-item">
+                <span className="detail-card-icon" aria-hidden="true">🪦</span>
+                <div><span>מקום קבורה</span><strong>{person.burialPlace}</strong></div>
+              </div>
+            )}
+          </div>
+        )}
 
         {(rels.parents.length > 0 || rels.partners.length > 0 || rels.children.length > 0 || rels.siblings.length > 0) && (
           <section className="profile-relatives-section" aria-label="קשרים משפחתיים">
@@ -921,12 +965,16 @@ function ProfileViewPanel({
             <div className="profile-relatives-groups">
               {rels.parents.length > 0 && (
                 <div className="profile-rel-group">
-                  <span className="profile-rel-label">הורים:</span>
-                  <div className="profile-rel-chips">
+                  <span className="profile-rel-label">👪 הורים</span>
+                  <div className="profile-rel-cards">
                     {rels.parents.map(rel => (
-                      <button key={rel.id} type="button" className="profile-rel-chip" onClick={() => onSelectRelative(rel.id)}>
-                        <span className={`chip-dot ${rel.gender}`} />
-                        <span>{rel.name}</span>
+                      <button key={rel.id} type="button" className="profile-rel-card" onClick={() => onSelectRelative(rel.id)}>
+                        <Avatar person={rel} size="small" />
+                        <div className="profile-rel-card-text">
+                          <strong>{rel.name}</strong>
+                          {personMeta(rel) && <small>{personMeta(rel)}</small>}
+                        </div>
+                        <span className="profile-rel-card-arrow" aria-hidden="true">←</span>
                       </button>
                     ))}
                   </div>
@@ -934,12 +982,16 @@ function ProfileViewPanel({
               )}
               {rels.partners.length > 0 && (
                 <div className="profile-rel-group">
-                  <span className="profile-rel-label">בני/בנות זוג:</span>
-                  <div className="profile-rel-chips">
+                  <span className="profile-rel-label">💍 זוגיות</span>
+                  <div className="profile-rel-cards">
                     {rels.partners.map(rel => (
-                      <button key={rel.id} type="button" className="profile-rel-chip" onClick={() => onSelectRelative(rel.id)}>
-                        <span className={`chip-dot ${rel.gender}`} />
-                        <span>{rel.name}</span>
+                      <button key={rel.id} type="button" className="profile-rel-card" onClick={() => onSelectRelative(rel.id)}>
+                        <Avatar person={rel} size="small" />
+                        <div className="profile-rel-card-text">
+                          <strong>{rel.name}</strong>
+                          {personMeta(rel) && <small>{personMeta(rel)}</small>}
+                        </div>
+                        <span className="profile-rel-card-arrow" aria-hidden="true">←</span>
                       </button>
                     ))}
                   </div>
@@ -947,12 +999,16 @@ function ProfileViewPanel({
               )}
               {rels.children.length > 0 && (
                 <div className="profile-rel-group">
-                  <span className="profile-rel-label">ילדים ({rels.children.length}):</span>
-                  <div className="profile-rel-chips">
+                  <span className="profile-rel-label">👶 ילדים ({rels.children.length})</span>
+                  <div className="profile-rel-cards">
                     {rels.children.map(rel => (
-                      <button key={rel.id} type="button" className="profile-rel-chip" onClick={() => onSelectRelative(rel.id)}>
-                        <span className={`chip-dot ${rel.gender}`} />
-                        <span>{rel.name}</span>
+                      <button key={rel.id} type="button" className="profile-rel-card" onClick={() => onSelectRelative(rel.id)}>
+                        <Avatar person={rel} size="small" />
+                        <div className="profile-rel-card-text">
+                          <strong>{rel.name}</strong>
+                          {personMeta(rel) && <small>{personMeta(rel)}</small>}
+                        </div>
+                        <span className="profile-rel-card-arrow" aria-hidden="true">←</span>
                       </button>
                     ))}
                   </div>
@@ -960,12 +1016,16 @@ function ProfileViewPanel({
               )}
               {rels.siblings.length > 0 && (
                 <div className="profile-rel-group">
-                  <span className="profile-rel-label">אחים ואחיות ({rels.siblings.length}):</span>
-                  <div className="profile-rel-chips">
+                  <span className="profile-rel-label">🤝 אחים ({rels.siblings.length})</span>
+                  <div className="profile-rel-cards">
                     {rels.siblings.map(rel => (
-                      <button key={rel.id} type="button" className="profile-rel-chip" onClick={() => onSelectRelative(rel.id)}>
-                        <span className={`chip-dot ${rel.gender}`} />
-                        <span>{rel.name}</span>
+                      <button key={rel.id} type="button" className="profile-rel-card" onClick={() => onSelectRelative(rel.id)}>
+                        <Avatar person={rel} size="small" />
+                        <div className="profile-rel-card-text">
+                          <strong>{rel.name}</strong>
+                          {personMeta(rel) && <small>{personMeta(rel)}</small>}
+                        </div>
+                        <span className="profile-rel-card-arrow" aria-hidden="true">←</span>
                       </button>
                     ))}
                   </div>
@@ -1317,22 +1377,39 @@ function FamilyDirectoryView({
             {filteredPeople.map(person => {
               const stats = personStats.get(person.id) ?? { children: 0, descendants: 0 };
               const hasBday = isBirthdayInCurrentHebrewMonth(person);
+              const isDeceased = !person.isAlive || person.deathYear !== undefined;
+              const rels = relativesOf(graph, person.id);
+              const partnerNames = rels.partners.map(p => p.name).join(", ");
+              const parentNames = rels.parents.map(p => p.name).join(" ו-");
               return (
-                <article key={person.id} className="directory-card">
+                <article key={person.id} className={`directory-card ${isDeceased ? "deceased" : ""}`}>
+                  <span className={`directory-card-accent ${person.gender}`} aria-hidden="true" />
                   <button type="button" className="directory-card-main" onClick={() => onSelectPerson(person.id)}>
                     <Avatar person={person} size="small" />
                     <div className="directory-card-info">
                       <div className="directory-card-title-row">
                         <strong>{person.name}</strong>
-                        {hasBday && <span className="dir-bday-badge" title="יום הולדת החודש">🎂</span>}
+                        <div className="directory-card-badges">
+                          {hasBday && <span className="dir-bday-badge" title="יום הולדת החודש">🎂</span>}
+                          {isDeceased && <span className="dir-deceased-badge" title="נפטר/ה">🕯️</span>}
+                        </div>
                       </div>
+                      {person.previousLastName && <small className="directory-card-maiden">לבית {person.previousLastName}</small>}
                       {person.role?.trim() && <span className="directory-card-role">{person.role}</span>}
-                      {personMeta(person) && <small className="directory-card-meta">{personMeta(person)}</small>}
-                      {stats.children > 0 && <small className="directory-card-stats">{stats.children} ילדים · {stats.descendants} צאצאים</small>}
+                      <div className="directory-card-chips">
+                        {personMeta(person) && <span className="directory-chip">{personMeta(person)}</span>}
+                        {person.birthCountry && <span className="directory-chip">📍 {person.birthCountry}</span>}
+                        {stats.children > 0 && <span className="directory-chip branch">👶 {stats.children} ילדים{stats.descendants > stats.children ? ` · ${stats.descendants} צאצאים` : ""}</span>}
+                      </div>
+                      {(partnerNames || parentNames) && (
+                        <small className="directory-card-relatives">
+                          {partnerNames ? `💍 ${partnerNames}` : `👪 בן/בת של ${parentNames}`}
+                        </small>
+                      )}
                     </div>
                   </button>
                   <div className="directory-card-actions">
-                    <button type="button" className="button ghost small-btn" onClick={() => onSelectPerson(person.id)}>לכרטיס</button>
+                    <button type="button" className="button ghost small-btn" onClick={() => onSelectPerson(person.id)}>📋 כרטיס מלא</button>
                     <button type="button" className="button ghost small-btn" onClick={() => onOpenExplorer(person.id)}>🧭 בסייר</button>
                     <button type="button" className="button ghost small-btn" onClick={() => onFocusOnMap(person.id)}>🌳 בעץ</button>
                   </div>

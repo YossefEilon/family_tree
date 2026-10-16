@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ageLabel, isBirthdayInCurrentHebrewMonth, spouses, type FamilyGraph, type Person } from "@/lib/domain";
+import { ageLabel, childrenOf, isBirthdayInCurrentHebrewMonth, spouses, type FamilyGraph, type Person } from "@/lib/domain";
 
 export type Relatives = { parents: Person[]; siblings: Person[]; partners: Person[]; children: Person[] };
 
@@ -42,40 +42,106 @@ export function personMeta(person: Person): string {
 
 export function Avatar({ person, size }: { person: Person; size: "large" | "small" }) {
   const initial = person.name.trim().charAt(0) || "?";
-  if (person.profileImageUrl) return <img className={`mobile-avatar ${size}`} src={person.profileImageUrl} alt="" aria-hidden="true" />;
+  if (person.profileImageUrl) {
+    return (
+      <span className={`mobile-avatar-ring ${size} ${person.gender}`}>
+        <img className={`mobile-avatar ${size}`} src={person.profileImageUrl} alt="" aria-hidden="true" />
+      </span>
+    );
+  }
   return <span className={`mobile-avatar ${size} ${person.gender}`} aria-hidden="true">{initial}</span>;
 }
 
-function PersonTile({ person, relationHint, onFocus, onDetails }: { person: Person; relationHint?: string; onFocus: () => void; onDetails: () => void }) {
+function PersonTile({
+  person,
+  relationHint,
+  childCount,
+  onFocus,
+  onDetails,
+}: {
+  person: Person;
+  relationHint?: string;
+  childCount: number;
+  onFocus: () => void;
+  onDetails: () => void;
+}) {
   const hasBirthday = isBirthdayInCurrentHebrewMonth(person);
-  return <div className="mobile-tile">
-    <button className="mobile-tile-main" onClick={onFocus} aria-label={`מעבר אל ${person.name}`}>
-      <div className="mobile-tile-avatar-wrap">
-        <Avatar person={person} size="small" />
-        {hasBirthday && <span className="mobile-tile-birthday" title="יום הולדת החודש">🎂</span>}
+  const isDeceased = !person.isAlive || person.deathYear !== undefined;
+
+  return (
+    <article className={`mobile-tile ${person.gender} ${isDeceased ? "deceased" : ""}`}>
+      <div className={`mobile-tile-top-bar ${person.gender}`} aria-hidden="true" />
+      <button className="mobile-tile-main" onClick={onFocus} aria-label={`מעבר אל ${person.name}`}>
+        <div className="mobile-tile-avatar-wrap">
+          <Avatar person={person} size="small" />
+          {hasBirthday && <span className="mobile-tile-birthday" title="יום הולדת החודש">🎂</span>}
+        </div>
+        <div className="mobile-tile-text">
+          <div className="mobile-tile-badges">
+            {relationHint && <span className={`mobile-tile-relation ${person.gender}`}>{relationHint}</span>}
+            {isDeceased && <span className="mobile-tile-Memorial" title="נפטר/ה">🕯️</span>}
+            {childCount > 0 && <span className="mobile-tile-branch-pill">🌿 {childCount} {childCount === 1 ? "ילד/ה" : "ילדים"}</span>}
+          </div>
+          <span className="mobile-tile-name">{person.name}</span>
+          {person.previousLastName && <small className="mobile-tile-maiden">לבית {person.previousLastName}</small>}
+          {personMeta(person) && <small className="mobile-tile-meta">{personMeta(person)}</small>}
+        </div>
+      </button>
+      <div className="mobile-tile-footer">
+        <button type="button" className="mobile-tile-action focus-btn" onClick={onFocus} aria-label={`התמקד ב${person.name}`}>
+          🎯 התמקד בענף
+        </button>
+        <span className="mobile-tile-footer-sep" aria-hidden="true" />
+        <button type="button" className="mobile-tile-action details-btn" onClick={onDetails} aria-label={`פתיחת כרטיס פרטים עבור ${person.name}`}>
+          📋 כרטיס מלא
+        </button>
       </div>
-      <div className="mobile-tile-text">
-        {relationHint && <span className="mobile-tile-relation">{relationHint}</span>}
-        <span className="mobile-tile-name">{person.name}</span>
-        {personMeta(person) && <small className="mobile-tile-meta">{personMeta(person)}</small>}
-      </div>
-      <span className="mobile-tile-arrow" aria-hidden="true">←</span>
-    </button>
-    <button className="mobile-tile-details" onClick={onDetails} aria-label={`פתיחת כרטיס פרטים עבור ${person.name}`}>כרטיס מלא</button>
-  </div>;
+    </article>
+  );
 }
 
-function RelativesSection({ title, icon, relationHint, people, onFocus, onDetails }: { title: string; icon: string; relationHint?: (person: Person) => string; people: Person[]; onFocus: (id: string) => void; onDetails: (id: string) => void }) {
+function RelativesSection({
+  title,
+  icon,
+  relationHint,
+  people,
+  childCounts,
+  onFocus,
+  onDetails,
+}: {
+  title: string;
+  icon: string;
+  relationHint?: (person: Person) => string;
+  people: Person[];
+  childCounts: Map<string, number>;
+  onFocus: (id: string) => void;
+  onDetails: (id: string) => void;
+}) {
   if (people.length === 0) return null;
-  return <section className="mobile-relatives" aria-label={title}>
-    <div className="mobile-relatives-header">
-      <h3><span className="mobile-relatives-icon" aria-hidden="true">{icon}</span> {title} <span className="mobile-relatives-count">{people.length}</span></h3>
-      <small className="mobile-relatives-hint">לחצו על אדם כדי להתמקד בו</small>
-    </div>
-    <div className="mobile-tiles-grid">
-      {people.map(person => <PersonTile key={person.id} person={person} relationHint={relationHint?.(person)} onFocus={() => onFocus(person.id)} onDetails={() => onDetails(person.id)} />)}
-    </div>
-  </section>;
+  return (
+    <section className="mobile-relatives" aria-label={title}>
+      <div className="mobile-relatives-header">
+        <h3>
+          <span className="mobile-relatives-icon" aria-hidden="true">{icon}</span>
+          <span>{title}</span>
+          <span className="mobile-relatives-count">{people.length}</span>
+        </h3>
+        <small className="mobile-relatives-hint">לחצו על כרטיס כדי להתמקד או לפתוח פרטים</small>
+      </div>
+      <div className="mobile-tiles-grid">
+        {people.map(person => (
+          <PersonTile
+            key={person.id}
+            person={person}
+            relationHint={relationHint?.(person)}
+            childCount={childCounts.get(person.id) ?? 0}
+            onFocus={() => onFocus(person.id)}
+            onDetails={() => onDetails(person.id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -92,6 +158,14 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
   onShowLineage?: (id: string) => void;
 }) {
   const peopleById = useMemo(() => new Map(graph.people.map(person => [person.id, person])), [graph]);
+  const childCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const person of graph.people) {
+      counts.set(person.id, childrenOf(graph, person.id).size);
+    }
+    return counts;
+  }, [graph]);
+
   const defaultId = useMemo(() => {
     if (initialId && peopleById.has(initialId)) return initialId;
     const isaac = graph.people.find(person => person.name.trim() === "יצחק אילון");
@@ -138,6 +212,7 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
 
   const isDeceased = !focus.isAlive || focus.deathYear !== undefined;
   const hasBirthday = isBirthdayInCurrentHebrewMonth(focus);
+  const focusAge = ageLabel(focus);
 
   return <div className="mobile-tree">
     <div className="explorer-container">
@@ -181,6 +256,7 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
             icon="⬆️"
             relationHint={p => p.gender === "female" ? "אם" : p.gender === "male" ? "אב" : "הורה"}
             people={relatives.parents}
+            childCounts={childCounts}
             onFocus={goTo}
             onDetails={onSelectPerson}
           />
@@ -188,39 +264,55 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
         </>
       )}
 
-      <section className="mobile-focus" aria-label={`במוקד כעת: ${focus.name}`}>
-        <div className="mobile-focus-badge-row">
-          <span className="focus-pill">במוקד כעת</span>
-          {hasBirthday && <span className="focus-birthday-pill">🎂 חוגג/ת יום הולדת החודש</span>}
-          {isDeceased && <span className="focus-deceased-pill">🕯️ לזכרו/ה</span>}
-        </div>
-        <div className="mobile-focus-main">
-          <Avatar person={focus} size="large" />
-          <div className="mobile-focus-info">
-            <h2>{focus.name}</h2>
-            {focus.previousLastName && <p className="mobile-focus-maiden">שם משפחה קודם: {focus.previousLastName}</p>}
-            {focus.role?.trim() && <p className="mobile-focus-role">{focus.role}</p>}
-            {personMeta(focus) && <p className="mobile-focus-meta">{personMeta(focus)}</p>}
-            {focus.birthCountry && <p className="mobile-focus-meta">📍 ארץ לידה: {focus.birthCountry}</p>}
+      <section className={`mobile-focus ${focus.gender}`} aria-label={`במוקד כעת: ${focus.name}`}>
+        <div className={`mobile-focus-banner ${focus.gender}`} aria-hidden="true" />
+        <div className="mobile-focus-content">
+          <div className="mobile-focus-badge-row">
+            <span className="focus-pill">✨ במוקד כעת</span>
+            {hasBirthday && <span className="focus-birthday-pill">🎂 חוגג/ת יום הולדת החודש</span>}
+            {isDeceased && <span className="focus-deceased-pill">🕯️ לזכרו/ה</span>}
           </div>
-        </div>
-        {focus.lifeStory?.trim() && (
-          <p className="mobile-focus-story-preview">{focus.lifeStory}</p>
-        )}
-        <div className="mobile-focus-actions">
-          <button className="button primary" onClick={() => onSelectPerson(focus.id)}>
-            📋 פרטים וסיפור חיים
-          </button>
-          {onShowLineage && (
-            <button className="button" onClick={() => onShowLineage(focus.id)}>
-              🌿 עץ דורות
-            </button>
+
+          <div className="mobile-focus-main">
+            <div className="mobile-focus-avatar-col" onClick={() => onSelectPerson(focus.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onSelectPerson(focus.id); }}>
+              <Avatar person={focus} size="large" />
+            </div>
+            <div className="mobile-focus-info">
+              <h2>{focus.name}</h2>
+              {focus.previousLastName && <p className="mobile-focus-maiden">לבית {focus.previousLastName}</p>}
+              {focus.role?.trim() && <span className="mobile-focus-role-badge">{focus.role}</span>}
+              <div className="mobile-focus-chips">
+                {focusAge && <span className="focus-info-chip">⏳ {isDeceased ? `נפטר/ה בגיל ${focusAge}` : `גיל: ${focusAge}`}</span>}
+                {focus.birthYear && <span className="focus-info-chip">📅 {focus.birthYear}{focus.deathYear ? `–${focus.deathYear}` : ""}</span>}
+                {focus.hebrewBirthDate && <span className="focus-info-chip">✡️ {focus.hebrewBirthDate}</span>}
+                {focus.birthCountry && <span className="focus-info-chip">📍 {focus.birthCountry}</span>}
+                {relatives.children.length > 0 && <span className="focus-info-chip">👶 {relatives.children.length} ילדים</span>}
+              </div>
+            </div>
+          </div>
+
+          {focus.lifeStory?.trim() && (
+            <div className="mobile-focus-story-box" onClick={() => onSelectPerson(focus.id)}>
+              <strong>📖 מתוך סיפור החיים:</strong>
+              <p className="mobile-focus-story-preview">{focus.lifeStory}</p>
+            </div>
           )}
-          {canEdit && (
-            <button className="button accent-outline" onClick={() => onAddMember(focus.id)}>
-              + הוספת קשר משפחתי
+
+          <div className="mobile-focus-actions">
+            <button className="button primary" onClick={() => onSelectPerson(focus.id)}>
+              📋 פתיחת כרטיס מלא
             </button>
-          )}
+            {onShowLineage && (
+              <button className="button" onClick={() => onShowLineage(focus.id)}>
+                🌿 עץ דורות
+              </button>
+            )}
+            {canEdit && (
+              <button className="button accent-outline" onClick={() => onAddMember(focus.id)}>
+                + הוספת קשר משפחתי
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -230,6 +322,7 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
           icon="💍"
           relationHint={p => p.gender === "female" ? "בת זוג" : p.gender === "male" ? "בן זוג" : "זוגיות"}
           people={relatives.partners}
+          childCounts={childCounts}
           onFocus={goTo}
           onDetails={onSelectPerson}
         />
@@ -243,6 +336,7 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
             icon="⬇️"
             relationHint={p => p.gender === "female" ? "בת" : p.gender === "male" ? "בן" : "ילד/ה"}
             people={relatives.children}
+            childCounts={childCounts}
             onFocus={goTo}
             onDetails={onSelectPerson}
           />
@@ -255,6 +349,7 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
           icon="👥"
           relationHint={p => p.gender === "female" ? "אחות" : p.gender === "male" ? "אח" : "אח/ות"}
           people={relatives.siblings}
+          childCounts={childCounts}
           onFocus={goTo}
           onDetails={onSelectPerson}
         />
