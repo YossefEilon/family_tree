@@ -318,9 +318,15 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
 
       {relatives.partners.length > 0 && (
         <RelativesSection
-          title="בני/בנות זוג"
+          title={
+            relatives.partners.length === 1
+              ? (relatives.partners[0].gender === "female" || (relatives.partners[0].gender === "neutral" && focus.gender === "male") ? "בת זוג" : "בן זוג")
+              : relatives.partners.every(p => p.gender === "female")
+                ? "בנות זוג"
+                : "בני זוג"
+          }
           icon="💍"
-          relationHint={p => p.gender === "female" ? "בת זוג" : p.gender === "male" ? "בן זוג" : "זוגיות"}
+          relationHint={p => p.gender === "female" || (p.gender === "neutral" && focus.gender === "male") ? "בת זוג" : "בן זוג"}
           people={relatives.partners}
           childCounts={childCounts}
           onFocus={goTo}

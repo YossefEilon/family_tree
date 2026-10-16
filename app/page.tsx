@@ -982,7 +982,13 @@ function ProfileViewPanel({
               )}
               {rels.partners.length > 0 && (
                 <div className="profile-rel-group">
-                  <span className="profile-rel-label">💍 זוגיות</span>
+                  <span className="profile-rel-label">
+                    💍 {rels.partners.length === 1
+                      ? (rels.partners[0].gender === "female" || (rels.partners[0].gender === "neutral" && person.gender === "male") ? "בת זוג" : "בן זוג")
+                      : rels.partners.every(p => p.gender === "female")
+                        ? "בנות זוג"
+                        : "בני זוג"}
+                  </span>
                   <div className="profile-rel-cards">
                     {rels.partners.map(rel => (
                       <button key={rel.id} type="button" className="profile-rel-card" onClick={() => onSelectRelative(rel.id)}>
@@ -1204,10 +1210,14 @@ function AddRelationshipPanel({ source, people, onClose, onCreate }: { source: P
             <strong>ילד או ילדה</strong>
             <small>יתווסף בדור הבא</small>
           </button>
-          <button type="button" className={`relation-type-card ${type === "partner" ? "active" : ""}`} onClick={() => setType("partner")}>
+          <button type="button" className={`relation-type-card ${type === "partner" ? "active" : ""}`} onClick={() => {
+            setType("partner");
+            if (source.gender === "male") update("gender", "female");
+            else if (source.gender === "female") update("gender", "male");
+          }}>
             <span className="relation-type-icon">💍</span>
-            <strong>בן או בת זוג</strong>
-            <small>יתווסף לצד {source.name}</small>
+            <strong>{source.gender === "male" ? "בת זוג" : "בן זוג"}</strong>
+            <small>{source.gender === "male" ? `תתווסף לצד ${source.name}` : `יתווסף לצד ${source.name}`}</small>
           </button>
           <button type="button" className={`relation-type-card ${type === "parent" ? "active" : ""}`} onClick={() => setType("parent")}>
             <span className="relation-type-icon">⬆️</span>
@@ -1403,7 +1413,9 @@ function FamilyDirectoryView({
                       </div>
                       {(partnerNames || parentNames) && (
                         <small className="directory-card-relatives">
-                          {partnerNames ? `💍 ${partnerNames}` : `👪 בן/בת של ${parentNames}`}
+                          {partnerNames
+                            ? `💍 ${rels.partners[0]?.gender === "female" || (rels.partners[0]?.gender === "neutral" && person.gender === "male") ? "בת זוג" : "בן זוג"}: ${partnerNames}`
+                            : `👪 ${person.gender === "female" ? "בת של" : "בן של"} ${parentNames}`}
                         </small>
                       )}
                     </div>
