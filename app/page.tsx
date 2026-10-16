@@ -212,29 +212,29 @@ function PersonCard({ person, stats, selected, canEdit, onClick, onAddMember }: 
     <rect className="person-card-bg" width={NODE_WIDTH} height={NODE_HEIGHT} rx="18" />
     <path className={`person-card-accent ${person.gender}`} d="M 18 2 H 232 A 16 16 0 0 1 248 18 V 22 H 2 V 18 A 16 16 0 0 1 18 2 Z" />
     {hasBirthdayThisMonth && <g className="birthday-card-balloons" aria-hidden="true">
-      <g className="card-balloon card-balloon-pink"><ellipse cx="26" cy="20" rx="7" ry="9" /><path d="M26 29v18" /></g>
-      <g className="card-balloon card-balloon-blue"><ellipse cx="42" cy="31" rx="7" ry="9" /><path d="M42 40v15" /></g>
-      <g className="card-balloon card-balloon-yellow"><ellipse cx="14" cy="35" rx="7" ry="9" /><path d="M14 44v12" /></g>
+      <g className="card-balloon card-balloon-pink"><ellipse cx="218" cy="20" rx="7" ry="9" /><path d="M218 29v18" /></g>
+      <g className="card-balloon card-balloon-blue"><ellipse cx="235" cy="31" rx="7" ry="9" /><path d="M235 40v15" /></g>
+      <g className="card-balloon card-balloon-yellow"><ellipse cx="202" cy="35" rx="7" ry="9" /><path d="M202 44v12" /></g>
     </g>}
     {person.profileImageUrl ? (
-      <image className="profile-image" href={person.profileImageUrl} x="190" y="18" width="46" height="46" preserveAspectRatio="xMidYMid slice" />
+      <image className="profile-image" href={person.profileImageUrl} x="16" y="16" width="46" height="46" preserveAspectRatio="xMidYMid slice" />
     ) : (
       <g>
-        <circle className={`dot ${person.gender}`} cx="213" cy="41" r="22" />
-        <text className="avatar-initial" x="213" y="47" textAnchor="middle">{initial}</text>
+        <circle className={`dot ${person.gender}`} cx="39" cy="39" r="21" />
+        <text className="avatar-initial" x="39" y="45" textAnchor="middle">{initial}</text>
       </g>
     )}
-    <text className="name" x="178" y="38" textAnchor="end" direction="rtl" unicodeBidi="plaintext"><title>{person.name}</title>{displayName}</text>
+    <text className="name" x="70" y="38" textAnchor="start" direction="ltr" unicodeBidi="plaintext"><title>{person.name}</title>{displayName}</text>
     {person.role?.trim() ? (
-      <text className="meta role" x="178" y="58" textAnchor="end" direction="rtl" unicodeBidi="plaintext">{person.role}</text>
+      <text className="meta role" x="70" y="56" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{person.role}</text>
     ) : person.previousLastName ? (
-      <text className="meta" x="178" y="58" textAnchor="end" direction="rtl" unicodeBidi="plaintext">לבית {person.previousLastName}</text>
+      <text className="meta" x="70" y="56" textAnchor="start" direction="ltr" unicodeBidi="plaintext">לבית {person.previousLastName}</text>
     ) : null}
-    <text className="meta" x="234" y="86" textAnchor="end" direction="rtl" unicodeBidi="plaintext">{statusLine}</text>
-    <line x1="14" y1="96" x2="236" y2="96" stroke="#edf1f7" strokeWidth="1" />
-    {hasBirthdayThisMonth && <g className="birthday-badge"><title>יום הולדת בחודש העברי הנוכחי</title><rect x="14" y="101" width="76" height="24" rx="12" /><text x="52" y="117" textAnchor="middle">🎂 החודש</text></g>}
-    {!showAddButton && <text className="meta family-meta" x="234" y="117" textAnchor="end" direction="rtl" unicodeBidi="plaintext">{familyMeta}</text>}
-    {showAddButton && <g className="add-member-button" role="button" tabIndex={0} onClick={event => { event.stopPropagation(); requestAddMember(); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); requestAddMember(); } }}><rect x="124" y="101" width="112" height="24" rx="8" /><text x="180" y="117" textAnchor="middle">+ הוספת קשר</text></g>}
+    <text className="meta" x="18" y="86" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{statusLine}</text>
+    <line x1="16" y1="96" x2="234" y2="96" stroke="#edf1f7" strokeWidth="1" />
+    {hasBirthdayThisMonth && <g className="birthday-badge"><title>יום הולדת בחודש העברי הנוכחי</title><rect x="156" y="100" width="78" height="24" rx="12" /><text x="195" y="116" textAnchor="middle">🎂 החודש</text></g>}
+    {!showAddButton && <text className="meta family-meta" x="18" y="116" textAnchor="start" direction="ltr" unicodeBidi="plaintext">{familyMeta}</text>}
+    {showAddButton && <g className="add-member-button" role="button" tabIndex={0} onClick={event => { event.stopPropagation(); requestAddMember(); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); requestAddMember(); } }}><rect x="18" y="101" width="112" height="24" rx="8" /><text x="74" y="117" textAnchor="middle">+ הוספת קשר</text></g>}
   </g>;
 }
 
