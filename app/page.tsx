@@ -242,24 +242,103 @@ function BirthdayBalloons() {
   return <div className="birthday-balloons" aria-hidden="true">{Array.from({ length: 7 }, (_, index) => <span key={index} className={`balloon balloon-${index + 1}`} />)}</div>;
 }
 
-type ImageEditorState = { src: string; zoom: number; pan: { x: number; y: number }; width: number; height: number };
+type ImageEditorState = {
+  src: string;
+  zoom: number;
+  rotation: number;
+  pan: { x: number; y: number };
+  width: number;
+  height: number;
+};
 
 function imagePanLimit(editor: ImageEditorState, axis: "x" | "y"): number {
-  const aspect = editor.width / editor.height;
+  const isRotated = editor.rotation % 180 !== 0;
+  const effectiveWidth = isRotated ? editor.height : editor.width;
+  const effectiveHeight = isRotated ? editor.width : editor.height;
+  const aspect = effectiveWidth / effectiveHeight;
   const overflowRatio = axis === "x" ? Math.max(1, aspect) : Math.max(1, 1 / aspect);
   return Math.max(0, (272 * overflowRatio * editor.zoom - 272) / 2);
+}
+
+async function compressImageToSafeSize(
+  image: HTMLImageElement,
+  editor: ImageEditorState,
+  maxChars = 44000
+): Promise<string> {
+  const isRotated = editor.rotation % 180 !== 0;
+  const srcW = isRotated ? image.naturalHeight : image.naturalWidth;
+  const srcH = isRotated ? image.naturalWidth : image.naturalHeight;
+
+  // Progressive compression steps to ensure 100% success within Google Sheets cell limit
+  const steps = [
+    { size: 360, quality: 0.82 },
+    { size: 360, quality: 0.70 },
+    { size: 320, quality: 0.65 },
+    { size: 280, quality: 0.60 },
+    { size: 240, quality: 0.55 },
+    { size: 200, quality: 0.50 },
+    { size: 160, quality: 0.45 },
+  ];
+
+  for (const step of steps) {
+    const { size, quality } = step;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
+    ctx.rotate((editor.rotation * Math.PI) / 180);
+
+    const previewSize = 272;
+    const scale = Math.max(size / srcW, size / srcH) * editor.zoom;
+    const panRatio = size / previewSize;
+
+    // Transform pan vector back from screen space into image rotated coordinate space
+    const rad = (-editor.rotation * Math.PI) / 180;
+    const rotPanX = editor.pan.x * Math.cos(rad) - editor.pan.y * Math.sin(rad);
+    const rotPanY = editor.pan.x * Math.sin(rad) + editor.pan.y * Math.cos(rad);
+
+    const drawW = image.naturalWidth * scale;
+    const drawH = image.naturalHeight * scale;
+
+    ctx.drawImage(
+      image,
+      -drawW / 2 + rotPanX * panRatio,
+      -drawH / 2 + rotPanY * panRatio,
+      drawW,
+      drawH
+    );
+    ctx.restore();
+
+    const result = canvas.toDataURL("image/jpeg", quality);
+    if (result.length <= maxChars || step === steps[steps.length - 1]) {
+      return result;
+    }
+  }
+  throw new Error("לא ניתן לדחוס את התמונה");
 }
 
 function ProfileImageField({ value, onChange }: { value?: string; onChange: (value: string | undefined) => void }) {
   const [editor, setEditor] = useState<ImageEditorState | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"file" | "url">("file");
+  const [urlInput, setUrlInput] = useState("");
+  const [urlPreviewValid, setUrlPreviewValid] = useState<boolean | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const draggingRef = useRef(false);
   const lastPointerRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const src = editor?.src;
-    return () => { if (src) URL.revokeObjectURL(src); };
+    return () => { if (src && src.startsWith("blob:")) URL.revokeObjectURL(src); };
   }, [editor?.src]);
 
   const closeEditor = () => {
@@ -269,36 +348,65 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
   };
 
   const selectFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      setImageError("נא לבחור קובץ תמונה תקין (JPG, PNG, WebP).");
+      return;
+    }
     setImageError(null);
     const src = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => setEditor({ src, zoom: 1, pan: { x: 0, y: 0 }, width: image.naturalWidth, height: image.naturalHeight });
-    image.onerror = () => { URL.revokeObjectURL(src); setImageError("לא ניתן לפתוח את התמונה. נסו קובץ אחר."); };
+    image.onload = () => setEditor({
+      src,
+      zoom: 1,
+      rotation: 0,
+      pan: { x: 0, y: 0 },
+      width: image.naturalWidth,
+      height: image.naturalHeight
+    });
+    image.onerror = () => {
+      URL.revokeObjectURL(src);
+      setImageError("לא ניתן לפתוח את התמונה. נסו קובץ אחר.");
+    };
     image.src = src;
   };
 
-  const saveEditedImage = () => {
+  const rotateImage = () => {
     if (!editor) return;
-    const image = new Image();
-    image.onload = () => {
-      const size = 600;
-      const canvas = document.createElement("canvas");
-      canvas.width = size; canvas.height = size;
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      context.fillStyle = "#fff"; context.fillRect(0, 0, size, size);
-      const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * editor.zoom;
-      const width = image.naturalWidth * scale;
-      const height = image.naturalHeight * scale;
-      context.drawImage(image, (size - width) / 2 + editor.pan.x * 600 / 272, (size - height) / 2 + editor.pan.y * 600 / 272, width, height);
-      let compressed = canvas.toDataURL("image/jpeg", .65);
-      if (compressed.length > 48000) compressed = canvas.toDataURL("image/jpeg", .45);
-      if (compressed.length > 48000) { setImageError("התמונה גדולה מדי לשמירה. נסו תמונה קטנה יותר."); return; }
-      onChange(compressed);
-      closeEditor();
-    };
-    image.src = editor.src;
+    const nextRotation = (editor.rotation + 90) % 360;
+    setEditor({ ...editor, rotation: nextRotation, pan: { x: 0, y: 0 } });
+  };
+
+  const resetCrop = () => {
+    if (!editor) return;
+    setEditor({ ...editor, zoom: 1, pan: { x: 0, y: 0 } });
+  };
+
+  const saveEditedImage = async () => {
+    if (!editor) return;
+    setIsProcessing(true);
+    setImageError(null);
+    try {
+      const image = new Image();
+      image.onload = async () => {
+        try {
+          const compressed = await compressImageToSafeSize(image, editor);
+          onChange(compressed);
+          closeEditor();
+        } catch {
+          setImageError("שגיאה בעיבוד התמונה. נסו שוב.");
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+      image.onerror = () => {
+        setImageError("לא ניתן לטעון את התמונה לעיבוד.");
+        setIsProcessing(false);
+      };
+      image.src = editor.src;
+    } catch {
+      setImageError("שגיאה בעיבוד התמונה.");
+      setIsProcessing(false);
+    }
   };
 
   const updatePan = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -307,26 +415,304 @@ function ProfileImageField({ value, onChange }: { value?: string; onChange: (val
     const maxPanY = imagePanLimit(editor, "y");
     const x = editor.pan.x + event.clientX - lastPointerRef.current.x;
     const y = editor.pan.y + event.clientY - lastPointerRef.current.y;
-    setEditor({ ...editor, pan: { x: Math.max(-maxPanX, Math.min(maxPanX, x)), y: Math.max(-maxPanY, Math.min(maxPanY, y)) } });
+    setEditor({
+      ...editor,
+      pan: { x: Math.max(-maxPanX, Math.min(maxPanX, x)), y: Math.max(-maxPanY, Math.min(maxPanY, y)) }
+    });
     lastPointerRef.current = { x: event.clientX, y: event.clientY };
   };
 
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    if (!editor) return;
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+    const zoom = Math.max(1, Math.min(3, editor.zoom + delta));
+    const next = { ...editor, zoom };
+    const maxPanX = imagePanLimit(next, "x");
+    const maxPanY = imagePanLimit(next, "y");
+    setEditor({
+      ...next,
+      pan: { x: Math.max(-maxPanX, Math.min(maxPanX, editor.pan.x)), y: Math.max(-maxPanY, Math.min(maxPanY, editor.pan.y)) }
+    });
+  };
+
+  const handleUrlApply = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    if (!/^https?:\/\//i.test(trimmed)) {
+      setImageError("נא להזין כתובת תקינה שמתחילה ב-http:// או https://");
+      return;
+    }
+    onChange(trimmed);
+    setUrlInput("");
+    setUrlPreviewValid(null);
+  };
+
   return <div className="image-field full">
-    <div className="image-field-heading"><span>תמונת פרופיל</span><small>{value ? "ניתן להחליף את התמונה" : "בחירת תמונה מהמכשיר"}</small></div>
-    {value && !editor && <img className="image-field-preview" src={value} alt="תצוגה מקדימה של תמונת הפרופיל" />}
-    {editor ? <div className="image-editor" role="group" aria-label="התאמת תמונת הפרופיל">
-      <div className="image-crop-preview" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); draggingRef.current = true; lastPointerRef.current = { x: event.clientX, y: event.clientY }; }} onPointerMove={updatePan} onPointerUp={() => { draggingRef.current = false; }} onPointerCancel={() => { draggingRef.current = false; }}><img src={editor.src} alt="תצוגה מקדימה לחיתוך" style={{ transform: `translate(${editor.pan.x}px, ${editor.pan.y}px) scale(${editor.zoom})` }} /></div>
-      <label className="image-zoom">הגדלה <input type="range" min="1" max="2.5" step="0.05" value={editor.zoom} onChange={event => { const zoom = Number(event.target.value); const next = { ...editor, zoom }; const maxPanX = imagePanLimit(next, "x"); const maxPanY = imagePanLimit(next, "y"); setEditor({ ...next, pan: { x: Math.max(-maxPanX, Math.min(maxPanX, editor.pan.x)), y: Math.max(-maxPanY, Math.min(maxPanY, editor.pan.y)) } }); }} /><output>{Math.round(editor.zoom * 100)}%</output></label>
-      <small className="image-editor-hint">גררו את התמונה כדי לשנות את המיקום</small>
-      {imageError && <p role="alert" className="field-error">{imageError}</p>}
-      <div className="image-editor-actions"><button type="button" className="button" onClick={closeEditor}>ביטול</button><button type="button" className="button primary" onClick={saveEditedImage}>שימוש בתמונה</button></div>
-    </div> : <div className="image-field-buttons">
-      <button type="button" className="button image-pick-button" onClick={() => inputRef.current?.click()}>{value ? "📷 החלפת תמונה" : "📷 בחירת תמונה"}</button>
-      <input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={event => { const file = event.target.files?.[0]; if (file) selectFile(file); }} />
-      {value && <button type="button" className="button ghost image-remove-button" onClick={() => onChange(undefined)}>הסרת תמונה</button>}
-      {imageError && <p role="alert" className="field-error">{imageError}</p>}
-    </div>}
+    <div className="image-field-heading">
+      <span>תמונת פרופיל</span>
+      <small>{value ? "יש תמונה מוגדרת · ניתן להחליף או להסיר" : "הוספת תמונה לפרופיל"}</small>
+    </div>
+
+    {editor ? (
+      <div className="image-editor" role="group" aria-label="עריכה והתאמת תמונה">
+        <div
+          className="image-crop-preview"
+          onWheel={handleWheelZoom}
+          onPointerDown={event => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            draggingRef.current = true;
+            lastPointerRef.current = { x: event.clientX, y: event.clientY };
+          }}
+          onPointerMove={updatePan}
+          onPointerUp={() => { draggingRef.current = false; }}
+          onPointerCancel={() => { draggingRef.current = false; }}
+        >
+          <img
+            src={editor.src}
+            alt="תצוגה מקדימה לחיתוך"
+            style={{
+              transform: `translate(${editor.pan.x}px, ${editor.pan.y}px) rotate(${editor.rotation}deg) scale(${editor.zoom})`
+            }}
+          />
+          <div className="crop-circle-mask" aria-hidden="true" />
+        </div>
+
+        <div className="image-editor-toolbar">
+          <div className="image-zoom-controls">
+            <button
+              type="button"
+              className="button ghost zoom-step-btn"
+              onClick={() => {
+                const zoom = Math.max(1, editor.zoom - 0.2);
+                setEditor({ ...editor, zoom });
+              }}
+              title="הקטנה"
+            >
+              −
+            </button>
+            <input
+              type="range"
+              min="1"
+              max="3"
+              step="0.05"
+              value={editor.zoom}
+              onChange={event => {
+                const zoom = Number(event.target.value);
+                const next = { ...editor, zoom };
+                const maxPanX = imagePanLimit(next, "x");
+                const maxPanY = imagePanLimit(next, "y");
+                setEditor({
+                  ...next,
+                  pan: { x: Math.max(-maxPanX, Math.min(maxPanX, editor.pan.x)), y: Math.max(-maxPanY, Math.min(maxPanY, editor.pan.y)) }
+                });
+              }}
+            />
+            <button
+              type="button"
+              className="button ghost zoom-step-btn"
+              onClick={() => {
+                const zoom = Math.min(3, editor.zoom + 0.2);
+                setEditor({ ...editor, zoom });
+              }}
+              title="הגדלה"
+            >
+              ＋
+            </button>
+            <output>{Math.round(editor.zoom * 100)}%</output>
+          </div>
+
+          <div className="image-editor-tools">
+            <button type="button" className="button small-btn" onClick={rotateImage} title="סיבוב התמונה ב-90 מעלות">
+              🔄 סיבוב 90°
+            </button>
+            <button type="button" className="button small-btn ghost" onClick={resetCrop} title="איפוס מיקום והגדלה">
+              🎯 איפוס
+            </button>
+          </div>
+        </div>
+
+        <small className="image-editor-hint">💡 גררו עם העכבר/אצבע למיקום, גלגלו להגדלה, ולחצו על סיבוב במידת הצורך</small>
+        {imageError && <p role="alert" className="field-error">{imageError}</p>}
+
+        <div className="image-editor-actions">
+          <button type="button" className="button" onClick={closeEditor} disabled={isProcessing}>
+            ביטול
+          </button>
+          <button type="button" className="button primary" onClick={saveEditedImage} disabled={isProcessing}>
+            {isProcessing ? "מעבד ושומר…" : "✓ שימוש בתמונה זו"}
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="image-upload-wrapper">
+        {value && (
+          <div className="current-image-preview">
+            <img src={value} alt="תצוגה מקדימה של תמונת הפרופיל" className="image-field-preview" />
+            <div className="current-image-actions">
+              <span className="current-image-badge">תמונה מוגדרת כעת</span>
+              <button type="button" className="button ghost danger-text" onClick={() => onChange(undefined)}>
+                🗑️ הסרת תמונה
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="image-source-tabs">
+          <button
+            type="button"
+            className={`source-tab ${mode === "file" ? "active" : ""}`}
+            onClick={() => setMode("file")}
+          >
+            📁 העלאה מהמכשיר או גרירה
+          </button>
+          <button
+            type="button"
+            className={`source-tab ${mode === "url" ? "active" : ""}`}
+            onClick={() => setMode("url")}
+          >
+            🔗 קישור לתמונה ברשת
+          </button>
+        </div>
+
+        {mode === "file" ? (
+          <div
+            className={`image-dropzone ${isDragging ? "dragging" : ""}`}
+            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={e => {
+              e.preventDefault();
+              setIsDragging(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) selectFile(file);
+            }}
+            onPaste={e => {
+              const file = e.clipboardData.files?.[0];
+              if (file) selectFile(file);
+            }}
+          >
+            <span className="dropzone-icon" aria-hidden="true">📷</span>
+            <strong>גררו לכאן תמונה, הדביקו מהלוח (Ctrl+V) או לחצו לבחירה</strong>
+            <small>תומך בכל סוגי התמונות (JPG, PNG, WebP) — נחתך ומותאם אוטומטית</small>
+            <button type="button" className="button primary" onClick={() => inputRef.current?.click()}>
+              {value ? "בחירת תמונה אחרת מהמכשיר" : "בחירת תמונה מהמכשיר"}
+            </button>
+            <input
+              ref={inputRef}
+              className="visually-hidden"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) selectFile(file);
+              }}
+            />
+          </div>
+        ) : (
+          <div className="image-url-box">
+            <label className="field full">
+              <span>כתובת URL ישירה לתמונה:</span>
+              <div className="url-input-row">
+                <input
+                  type="url"
+                  placeholder="https://example.com/photo.jpg"
+                  value={urlInput}
+                  onChange={e => {
+                    setUrlInput(e.target.value);
+                    setUrlPreviewValid(null);
+                    setImageError(null);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={!urlInput.trim()}
+                  onClick={handleUrlApply}
+                >
+                  הגדר כתמונה
+                </button>
+              </div>
+            </label>
+            {urlInput.trim() && (
+              <div className="url-preview-card">
+                <span>תצוגה מקדימה:</span>
+                <img
+                  src={urlInput.trim()}
+                  alt="תצוגה מקדימה מהקישור"
+                  className="image-field-preview"
+                  onLoad={() => setUrlPreviewValid(true)}
+                  onError={() => {
+                    setUrlPreviewValid(false);
+                    setImageError("לא ניתן לטעון תמונה מכתובת זו. ודאו שהקישור ישיר לקובץ תמונה.");
+                  }}
+                />
+                {urlPreviewValid === true && <span className="valid-url-tag">✓ התמונה נטענה בהצלחה</span>}
+              </div>
+            )}
+          </div>
+        )}
+        {imageError && <p role="alert" className="field-error">{imageError}</p>}
+      </div>
+    )}
   </div>;
+}
+
+function ImageViewerModal({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  return (
+    <div className="overlay lightbox-overlay" role="dialog" aria-modal="true" onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="lightbox-content">
+        <div className="lightbox-header">
+          <strong>תמונת פרופיל — {name}</strong>
+          <button type="button" className="button ghost close-btn" onClick={onClose} aria-label="סגירה">✕</button>
+        </div>
+        <div className="lightbox-body">
+          <img src={src} alt={`תמונה מלאה של ${name}`} className="lightbox-image" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhotoQuickChangeModal({
+  person,
+  onClose,
+  onSave,
+}: {
+  person: Person;
+  onClose: () => void;
+  onSave: (photoUrl: string | undefined) => void;
+}) {
+  const [photo, setPhoto] = useState<string | undefined>(person.profileImageUrl);
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="panel photo-quick-modal">
+        <div className="panel-header">
+          <h2>📷 שינוי תמונת פרופיל — {person.name}</h2>
+          <button type="button" className="button ghost" onClick={onClose} aria-label="סגירה">✕</button>
+        </div>
+        <ProfileImageField value={photo} onChange={setPhoto} />
+        <div className="panel-actions">
+          <button type="button" className="button" onClick={onClose}>ביטול</button>
+          <button
+            type="button"
+            className="button primary"
+            onClick={() => {
+              onSave(photo);
+              onClose();
+            }}
+          >
+            שמירת תמונה
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CumulativeFamilyTree({ graph, root, onClose, onOpenProfile }: { graph: FamilyGraph; root: Person; onClose: () => void; onOpenProfile?: (id: string) => void }) {
@@ -409,6 +795,7 @@ function ProfileViewPanel({
   onShowLineage,
   onEdit,
   onAddRelative,
+  onUpdatePhoto,
 }: {
   person: Person;
   graph: FamilyGraph;
@@ -423,7 +810,10 @@ function ProfileViewPanel({
   onShowLineage: () => void;
   onEdit: () => void;
   onAddRelative: () => void;
+  onUpdatePhoto?: (url: string | undefined) => void;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [photoEditOpen, setPhotoEditOpen] = useState(false);
   const childrenCount = stats.children;
   const descendantsCount = stats.descendants;
   const isDeceased = !person.isAlive || person.deathYear !== undefined;
@@ -455,9 +845,41 @@ function ProfileViewPanel({
         <div className="person-hero">
           <div className="profile-panel">
             {person.profileImageUrl ? (
-              <img src={person.profileImageUrl} alt={`תמונה של ${person.name}`} />
+              <div className="profile-image-interactive-wrapper">
+                <button
+                  type="button"
+                  className="profile-img-btn"
+                  onClick={() => setLightboxOpen(true)}
+                  title="לחיצה להגדלת התמונה"
+                >
+                  <img src={person.profileImageUrl} alt={`תמונה של ${person.name}`} />
+                  <span className="profile-img-zoom-hint" aria-hidden="true">🔍 הגדלה</span>
+                </button>
+                {canEdit && onUpdatePhoto && (
+                  <button
+                    type="button"
+                    className="profile-img-edit-badge"
+                    onClick={() => setPhotoEditOpen(true)}
+                    title="שינוי תמונת פרופיל"
+                  >
+                    📷 החלפה
+                  </button>
+                )}
+              </div>
             ) : (
-              <span className={`profile-placeholder ${person.gender}`}>{person.name.charAt(0)}</span>
+              <div className="profile-placeholder-interactive-wrapper">
+                <span className={`profile-placeholder ${person.gender}`}>{person.name.charAt(0)}</span>
+                {canEdit && onUpdatePhoto && (
+                  <button
+                    type="button"
+                    className="profile-img-add-badge"
+                    onClick={() => setPhotoEditOpen(true)}
+                    title="הוספת תמונת פרופיל"
+                  >
+                    📷 הוספת תמונה
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <div className="person-heading">
@@ -568,6 +990,23 @@ function ProfileViewPanel({
         </div>
       </div>
     </div>
+    {lightboxOpen && person.profileImageUrl && (
+      <ImageViewerModal
+        src={person.profileImageUrl}
+        name={person.name}
+        onClose={() => setLightboxOpen(false)}
+      />
+    )}
+    {photoEditOpen && onUpdatePhoto && (
+      <PhotoQuickChangeModal
+        person={person}
+        onClose={() => setPhotoEditOpen(false)}
+        onSave={url => {
+          onUpdatePhoto(url);
+          setPhotoEditOpen(false);
+        }}
+      />
+    )}
   </div>;
 }
 
@@ -659,6 +1098,7 @@ function PersonPanel({
       onShowLineage={onShowLineage}
       onEdit={() => setIsEditing(true)}
       onAddRelative={onAddRelative}
+      onUpdatePhoto={url => onSave({ ...person, profileImageUrl: url })}
     />
   );
 }
