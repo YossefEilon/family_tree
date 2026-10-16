@@ -260,13 +260,13 @@ export default function StoriesPage() {
           </div>
 
           <nav className="view-switcher stories-view-switcher" aria-label="ניווט באפליקציה">
-            <Link href="/" className="view-tab">
+            <Link href="/" prefetch className="view-tab">
               🌳 <span>מפת העץ</span>
             </Link>
-            <Link href="/?view=explorer" className="view-tab">
+            <Link href="/?view=explorer" prefetch className="view-tab">
               🧭 <span>סייר משפחה</span>
             </Link>
-            <Link href="/?view=directory" className="view-tab">
+            <Link href="/?view=directory" prefetch className="view-tab">
               📖 <span>אלפון</span>
             </Link>
             <span className="view-tab active" aria-current="page">
@@ -414,6 +414,7 @@ export default function StoriesPage() {
                 </p>
                 <Link
                   href="/?person=yitzhak_livnat"
+                  prefetch
                   className="wing-cta"
                   style={{ marginTop: "14px", alignSelf: "center", textDecoration: "none" }}
                 >
@@ -1128,6 +1129,7 @@ export default function StoriesPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <Link
                 href={`/?person=${encodeURIComponent(selectedPerson.key || selectedPerson.name)}`}
+                prefetch
                 className="wing-cta"
                 style={{ textDecoration: "none", background: "#163a47", color: "#fff" }}
               >

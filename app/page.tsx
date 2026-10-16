@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { calculateFamilyLayout, edgePath, NODE_HEIGHT, NODE_WIDTH } from "@/lib/layout";
 import { ageLabel, currentHebrewMonth, descendants, findPersonInGraph, formatBirthDate, isBirthdayInCurrentHebrewMonth, monthlyEvents, spouses, type FamilyGraph, type Person } from "@/lib/domain";
-import { fetchGoogleSheetGraph, GoogleSheetRequestError, saveGoogleSheetGraph } from "@/lib/google-sheet";
+import { fetchGoogleSheetGraph, getCachedGoogleSheetGraph, GoogleSheetRequestError, saveGoogleSheetGraph } from "@/lib/google-sheet";
 import MobileFamilyTree, { Avatar, personMeta, relativesOf } from "./mobile-tree";
 
 type PersonStats = { children: number; descendants: number };
@@ -1465,7 +1466,7 @@ export default function HomePage() {
   const [newEntityOpen, setNewEntityOpen] = useState(false);
   const [managePasswordOpen, setManagePasswordOpen] = useState(false);
   const [lineagePersonId, setLineagePersonId] = useState<string | null>(null);
-  const [graph, setGraph] = useState<FamilyGraph | null>(null);
+  const [graph, setGraph] = useState<FamilyGraph | null>(() => getCachedGoogleSheetGraph());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [explorerPersonId, setExplorerPersonId] = useState<string | undefined>(undefined);
   const [addMemberForId, setAddMemberForId] = useState<string | null>(null);
@@ -1544,7 +1545,17 @@ export default function HomePage() {
   useEffect(() => { const openAddMember = (event: Event) => { if (canEdit) setAddMemberForId((event as CustomEvent<string>).detail); }; window.addEventListener("family:add-member", openAddMember); return () => window.removeEventListener("family:add-member", openAddMember); }, [canEdit]);
   useEffect(() => { document.body.dataset.familyEdit = String(canEdit); return () => { delete document.body.dataset.familyEdit; }; }, [canEdit]);
 
-  const loadGraph = () => { setLoadError(null); void fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(friendlyGraphLoadError(error))); };
+  const loadGraph = () => {
+    setLoadError(null);
+    void fetchGoogleSheetGraph()
+      .then(setGraph)
+      .catch(error => {
+        setGraph(current => {
+          if (!current) setLoadError(friendlyGraphLoadError(error));
+          return current;
+        });
+      });
+  };
   useEffect(() => {
     loadGraph();
     fetch("/api/manage")
@@ -1898,14 +1909,15 @@ export default function HomePage() {
           >
             📖 <span>אלפון</span>
           </button>
-          <a
+          <Link
             href="/stories"
+            prefetch
             className="view-tab"
             title="מסע השורשים — שושלות אלבז ואמזלג"
             style={{ textDecoration: "none" }}
           >
             📜 <span>סיפורי המשפחות</span>
-          </a>
+          </Link>
         </nav>
       </div>
 
