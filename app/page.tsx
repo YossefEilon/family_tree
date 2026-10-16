@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { calculateFamilyLayout, edgePath, NODE_HEIGHT, NODE_WIDTH } from "@/lib/layout";
-import { ageLabel, currentHebrewMonth, descendants, formatBirthDate, isBirthdayInCurrentHebrewMonth, monthlyEvents, spouses, type FamilyGraph, type Person } from "@/lib/domain";
+import { ageLabel, currentHebrewMonth, descendants, findPersonInGraph, formatBirthDate, isBirthdayInCurrentHebrewMonth, monthlyEvents, spouses, type FamilyGraph, type Person } from "@/lib/domain";
 import { fetchGoogleSheetGraph, GoogleSheetRequestError, saveGoogleSheetGraph } from "@/lib/google-sheet";
 import MobileFamilyTree, { Avatar, personMeta, relativesOf } from "./mobile-tree";
 
@@ -1498,6 +1498,7 @@ export default function HomePage() {
   const svgRef = useRef<SVGSVGElement>(null);
   const didDrag = useRef(false);
   const didInitialFocus = useRef(false);
+  const lastFocusedPersonParam = useRef<string | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const panStart = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null);
   const pinchStart = useRef<{ distance: number; scale: number } | null>(null);
@@ -1562,22 +1563,56 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!graph || didInitialFocus.current) return;
-    const urlPersonId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("person") : null;
-    const person = (urlPersonId && graph.people.find(p => p.id === urlPersonId)) ||
+    if (!graph) return;
+    const urlPersonParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("person") : null;
+    if (didInitialFocus.current && (!urlPersonParam || urlPersonParam === lastFocusedPersonParam.current)) {
+      return;
+    }
+
+    const person = (urlPersonParam && findPersonInGraph(graph, urlPersonParam)) ||
       graph.people.find(candidate => candidate.name.trim() === "יצחק אילון") ||
       graph.people[0];
     if (!person) return;
+
     const fullLayout = calculateFamilyLayout(graph, viewportWidth);
     const positionedPerson = fullLayout.people.find(candidate => candidate.id === person.id);
-    if (!positionedPerson) return;
-    const initialScale = 4;
-    setScale(initialScale);
-    setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
-    if (urlPersonId) setSelectedId(person.id);
+    if (positionedPerson) {
+      const initialScale = 4;
+      setScale(initialScale);
+      setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
+    }
+    if (urlPersonParam) {
+      setSelectedId(person.id);
+    }
     setSpouseFocusId(person.id);
     setExplorerPersonId(person.id);
+    lastFocusedPersonParam.current = urlPersonParam;
     didInitialFocus.current = true;
+  }, [graph, viewportWidth]);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      if (!graph) return;
+      const urlPersonParam = new URLSearchParams(window.location.search).get("person");
+      if (urlPersonParam && urlPersonParam !== lastFocusedPersonParam.current) {
+        const person = findPersonInGraph(graph, urlPersonParam);
+        if (person) {
+          const fullLayout = calculateFamilyLayout(graph, viewportWidth);
+          const positionedPerson = fullLayout.people.find(candidate => candidate.id === person.id);
+          if (positionedPerson) {
+            const initialScale = 4;
+            setScale(initialScale);
+            setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
+          }
+          setSelectedId(person.id);
+          setSpouseFocusId(person.id);
+          setExplorerPersonId(person.id);
+          lastFocusedPersonParam.current = urlPersonParam;
+        }
+      }
+    };
+    window.addEventListener("popstate", handleUrlChange);
+    return () => window.removeEventListener("popstate", handleUrlChange);
   }, [graph, viewportWidth]);
 
   const activeGraph = graph ?? { people: [], relationships: [] };

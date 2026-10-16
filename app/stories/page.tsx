@@ -413,7 +413,7 @@ export default function StoriesPage() {
                   והאמהות מדמנאת, אפלו וקזבלנקה.
                 </p>
                 <Link
-                  href="/?person=2"
+                  href="/?person=yitzhak_livnat"
                   className="wing-cta"
                   style={{ marginTop: "14px", alignSelf: "center", textDecoration: "none" }}
                 >
@@ -1127,31 +1127,7 @@ export default function StoriesPage() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <Link
-                href={
-                  selectedPerson.key === "bentzion"
-                    ? "/?person=80"
-                    : selectedPerson.key === "yaakov"
-                    ? "/?person=30"
-                    : selectedPerson.key === "miriam"
-                    ? "/?person=12"
-                    : selectedPerson.key === "moshe_m"
-                    ? "/?person=23"
-                    : selectedPerson.key === "perla"
-                    ? "/?person=24"
-                    : selectedPerson.key === "yitzhak_livnat"
-                    ? "/?person=2"
-                    : selectedPerson.key === "elazar"
-                    ? "/?person=87"
-                    : selectedPerson.key === "eliyahu"
-                    ? "/?person=72"
-                    : selectedPerson.key === "yosef_k"
-                    ? "/?person=81"
-                    : selectedPerson.key === "yosef_am"
-                    ? "/?person=85"
-                    : selectedPerson.key === "moshe_d"
-                    ? "/?person=82"
-                    : "/"
-                }
+                href={`/?person=${encodeURIComponent(selectedPerson.key || selectedPerson.name)}`}
                 className="wing-cta"
                 style={{ textDecoration: "none", background: "#163a47", color: "#fff" }}
               >
