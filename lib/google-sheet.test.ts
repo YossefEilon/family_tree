@@ -41,4 +41,18 @@ describe("parseGoogleSheetGraph", () => {
     expect(() => parseGoogleSheetGraph({ nodes: [], links: [] })).toThrow();
     expect(() => parseGoogleSheetGraph({ nodes: [{ id: "x", name: "  " }], links: [] })).toThrow();
   });
+
+  it("accepts a Hebrew year on its own when the full date is unknown", () => {
+    const graph = parseGoogleSheetGraph({
+      nodes: [
+        { id: "y1", name: "א", hebrewBirthDate: `ה'תרצ"ו` },
+        { id: "y2", name: "ב", hebrewBirthDate: `תרצ"ו` },
+        { id: "y3", name: "ג", hebrewBirthDate: "5696" },
+        { id: "y4", name: "ד", hebrewBirthDate: `כ״ז בתשרי ה׳תשפ״ב` },
+        { id: "y5", name: "ה", hebrewBirthDate: "לא תאריך" },
+      ],
+      links: [],
+    });
+    expect(graph.people.map(person => person.id)).toEqual(["y1", "y2", "y3", "y4"]);
+  });
 });

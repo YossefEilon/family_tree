@@ -10,14 +10,24 @@ function isValidIsoDate(value: string): boolean {
 }
 
 function isValidHebrewBirthDate(value: string): boolean {
-  const match = value.match(/^(.+?) ב(.+?) (.+)$/);
-  if (!match || !hebrewDateMonths.includes(match[2])) return false;
-  const day = match[1].replace(/[״׳'"\s]/g, "");
-  const year = match[3].replace(/[״׳'"\s]/g, "");
-  const hasHebrewNumerals = (part: string) => /^[אבגדהוזחטיכלמנסעפצקרשתךםןףץ]+$/.test(part);
-  const validDay = /^\d{1,2}$/.test(day) ? Number(day) >= 1 && Number(day) <= 30 : hasHebrewNumerals(day);
-  const validYear = /^\d{4}$/.test(year) ? Number(year) >= 5000 && Number(year) <= 6000 : hasHebrewNumerals(year);
-  return validDay && validYear;
+  if (/ ב/.test(value)) {
+    const match = value.match(/^(.+?) ב(.+?) (.+)$/);
+    if (!match || !hebrewDateMonths.includes(match[2])) return false;
+    const day = match[1].replace(/[״׳'"\s]/g, "");
+    const year = match[3].replace(/[״׳'"\s]/g, "");
+    const hasHebrewNumerals = (part: string) => /^[אבגדהוזחטיכלמנסעפצקרשתךםןףץ]+$/.test(part);
+    const validDay = /^\d{1,2}$/.test(day) ? Number(day) >= 1 && Number(day) <= 30 : hasHebrewNumerals(day);
+    const validYear = /^\d{4}$/.test(year) ? Number(year) >= 5000 && Number(year) <= 6000 : hasHebrewNumerals(year);
+    return validDay && validYear;
+  }
+  // The full date is not always known: accept a year on its own
+  // (e.g. תרצ"ו, ה'תרצ"ו, 5696). A letter-year must carry the conventional
+  // ה prefix or geresh/gershayim punctuation so free text isn't mistaken for a year.
+  const compact = value.replace(/[״"׳'\s]/g, "");
+  if (/^\d{4}$/.test(compact)) return Number(compact) >= 5000 && Number(compact) <= 6000;
+  const hasYearMarker = compact.startsWith("ה") || /[״"׳']/.test(value);
+  const letters = compact.replace(/^ה/, "");
+  return hasYearMarker && /^[אבגדהוזחטיכלמנסעפצקרשתךםןףץ]+$/.test(letters);
 }
 
 const significantDateSchema = z.object({ label: z.string().min(1), date: z.string().refine(isValidHebrewBirthDate, "תאריך עברי אינו תקין") });
