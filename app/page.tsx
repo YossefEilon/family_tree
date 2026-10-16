@@ -270,55 +270,65 @@ function HebrewCalendarPanel({
                 .map(id => graph.people.find(p => p.id === id))
                 .filter((p): p is Person => Boolean(p));
 
+              const mainPerson = persons[0];
+              const age = mainPerson ? ageLabel(mainPerson) : undefined;
+
               return (
                 <article
                   key={event.id}
                   className={`calendar-event-card ${event.type}`}
                 >
-                  <div className="calendar-event-icon-box" aria-hidden="true">
-                    <span>{eventIcon(event.type)}</span>
-                  </div>
-
-                  <div className="calendar-event-details">
-                    <div className="calendar-event-header-row">
-                      <h4 className="calendar-event-label">{event.label}</h4>
-                      <span className={`calendar-event-tag ${event.type}`}>
-                        {eventTypeLabel(event.type)}
-                      </span>
+                  <div className="calendar-event-card-top">
+                    <div className="calendar-event-icon-box" aria-hidden="true">
+                      <span>{eventIcon(event.type)}</span>
                     </div>
 
-                    <div className="calendar-event-meta-row">
-                      <span className="calendar-event-date-chip">
-                        📅 {event.date}
-                      </span>
-                      {persons.length === 1 && persons[0].isAlive && (
-                        <span className="calendar-event-age-chip">
-                          {persons[0].birthYear ? `גיל ${new Date().getFullYear() - persons[0].birthYear}` : ""}
+                    <div className="calendar-event-title-area">
+                      <div className="calendar-event-title-row">
+                        <h4 className="calendar-event-label">{event.label}</h4>
+                        <span className={`calendar-event-tag ${event.type}`}>
+                          {eventTypeLabel(event.type)}
                         </span>
-                      )}
-                    </div>
-
-                    {persons.length > 0 && (
-                      <div className="calendar-event-people">
-                        {persons.map(person => (
-                          <button
-                            key={person.id}
-                            type="button"
-                            className="calendar-person-chip"
-                            onClick={() => {
-                              onSelectPerson(person.id);
-                              onClose();
-                            }}
-                            title={`מעבר לכרטיס של ${person.name}`}
-                          >
-                            <Avatar person={person} size="small" />
-                            <span className="calendar-person-name">{person.name}</span>
-                            <span className="calendar-person-arrow" aria-hidden="true">↗</span>
-                          </button>
-                        ))}
                       </div>
-                    )}
+
+                      <div className="calendar-event-meta-row">
+                        <span className="calendar-event-date-chip">
+                          📅 {event.date}
+                        </span>
+                        {event.type === "birthday" && age && (
+                          <span className="calendar-event-age-chip">
+                            גיל {age}
+                          </span>
+                        )}
+                        {event.type === "memorial" && mainPerson?.deathYear && (
+                          <span className="calendar-event-memorial-chip">
+                            נפטר/ה בשנת {mainPerson.deathYear}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
+
+                  {persons.length > 0 && (
+                    <div className="calendar-event-people">
+                      {persons.map(person => (
+                        <button
+                          key={person.id}
+                          type="button"
+                          className="calendar-person-chip"
+                          onClick={() => {
+                            onSelectPerson(person.id);
+                            onClose();
+                          }}
+                          title={`פתיחת כרטיס של ${person.name}`}
+                        >
+                          <Avatar person={person} size="small" />
+                          <span className="calendar-person-name">{person.name}</span>
+                          <span className="calendar-person-arrow" aria-hidden="true">לכרטיס ↗</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </article>
               );
             })}
