@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { COOKIE_NAME, createManageToken, MAX_AGE_SECONDS } from "@/lib/manage-auth";
+import { COOKIE_NAME, createManageToken, hasManageAccess, MAX_AGE_SECONDS } from "@/lib/manage-auth";
 
 // Lightweight in-memory rate limiting for the manage-login endpoint. On
 // serverless platforms each instance keeps its own counters, so this raises
@@ -60,6 +60,11 @@ export async function POST(request: Request) {
     path: "/",
   });
   return response;
+}
+
+export async function GET() {
+  const authorized = await hasManageAccess();
+  return NextResponse.json({ authorized });
 }
 
 export async function DELETE() {

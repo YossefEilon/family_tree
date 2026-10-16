@@ -1544,11 +1544,29 @@ export default function HomePage() {
   useEffect(() => { document.body.dataset.familyEdit = String(canEdit); return () => { delete document.body.dataset.familyEdit; }; }, [canEdit]);
 
   const loadGraph = () => { setLoadError(null); void fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(friendlyGraphLoadError(error))); };
-  useEffect(() => { loadGraph(); }, []);
+  useEffect(() => {
+    loadGraph();
+    fetch("/api/manage")
+      .then(res => (res.ok ? res.json() : { authorized: false }))
+      .then((json: { authorized?: boolean }) => {
+        if (json.authorized) setCanEdit(true);
+      })
+      .catch(() => {});
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get("view");
+      if (v === "explorer" || v === "directory" || v === "canvas") {
+        setViewMode(v);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!graph || didInitialFocus.current) return;
-    const person = graph.people.find(candidate => candidate.name.trim() === "יצחק אילון") ?? graph.people[0];
+    const urlPersonId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("person") : null;
+    const person = (urlPersonId && graph.people.find(p => p.id === urlPersonId)) ||
+      graph.people.find(candidate => candidate.name.trim() === "יצחק אילון") ||
+      graph.people[0];
     if (!person) return;
     const fullLayout = calculateFamilyLayout(graph, viewportWidth);
     const positionedPerson = fullLayout.people.find(candidate => candidate.id === person.id);
@@ -1556,6 +1574,7 @@ export default function HomePage() {
     const initialScale = 4;
     setScale(initialScale);
     setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
+    if (urlPersonId) setSelectedId(person.id);
     setSpouseFocusId(person.id);
     setExplorerPersonId(person.id);
     didInitialFocus.current = true;
@@ -1836,6 +1855,14 @@ export default function HomePage() {
           >
             📖 <span>אלפון</span>
           </button>
+          <a
+            href="/stories"
+            className="view-tab"
+            title="מסע השורשים — שושלות אלבז ואמזלג"
+            style={{ textDecoration: "none" }}
+          >
+            📜 <span>סיפורי המשפחות</span>
+          </a>
         </nav>
       </div>
 
