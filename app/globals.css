@@ -2415,15 +2415,27 @@ button { cursor: pointer; }
 
 /* Dedicated mobile rules for calendar popup */
 @media (max-width: 640px) {
+  .overlay.overlay-calendar {
+    padding: 0.5rem;
+    align-items: center;
+  }
+
   .calendar-panel {
-    width: 100%;
-    max-height: calc(100dvh - 1rem);
-    border-radius: 1.25rem;
-    margin: 0.5rem;
+    width: 100% !important;
+    height: 90vh !important;
+    height: 90dvh !important;
+    max-height: 90dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border-radius: 1.25rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 
   .calendar-panel-header {
     padding: 0.85rem 1rem;
+    flex-shrink: 0;
   }
 
   .calendar-title-badge {
@@ -2444,6 +2456,7 @@ button { cursor: pointer; }
   .calendar-heading {
     padding: 0.65rem 0.85rem;
     gap: 0.4rem;
+    flex-shrink: 0;
   }
 
   .calendar-nav-btn {
@@ -2463,6 +2476,7 @@ button { cursor: pointer; }
   .calendar-filter-bar {
     padding: 0.55rem 0.85rem;
     gap: 0.35rem;
+    flex-shrink: 0;
   }
 
   .calendar-tab {
@@ -2471,13 +2485,21 @@ button { cursor: pointer; }
   }
 
   .calendar-events-list {
-    padding: 0.75rem 0.85rem 1.5rem;
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 0.85rem 0.85rem 1.75rem !important;
     gap: 0.75rem;
+    display: flex;
+    flex-direction: column;
   }
 
   .calendar-event-card {
+    flex-shrink: 0 !important;
     padding: 0.85rem 0.9rem;
     gap: 0.65rem;
+    border-radius: 1rem;
   }
 
   .calendar-event-icon-box {

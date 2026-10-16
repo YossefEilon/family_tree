@@ -152,7 +152,7 @@ function HebrewCalendarPanel({
 
   return (
     <div
-      className="overlay"
+      className="overlay overlay-calendar"
       role="presentation"
       onPointerDown={event => {
         if (event.target === event.currentTarget) onClose();
