@@ -115,12 +115,244 @@ function QuickHelpPanel({ onClose, onSelectMode }: { onClose: () => void; onSele
   );
 }
 
-function HebrewCalendarPanel({ date, onChangeMonth, events, onClose, onSelectPerson }: { date: Date; onChangeMonth: (direction: -1 | 1) => void; events: ReturnType<typeof monthlyEvents>; onClose: () => void; onSelectPerson: (id: string) => void }) {
-  return <div className="overlay" role="presentation" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel calendar-panel" role="dialog" aria-modal="true" aria-labelledby="hebrew-calendar-title">
-    <div className="panel-header"><h2 id="hebrew-calendar-title">📅 אירועים משפחתיים לפי חודש עברי</h2><button className="button ghost" aria-label="סגירת לוח השנה" onClick={onClose}>✕</button></div>
-    <div className="calendar-heading"><button className="button" onClick={() => onChangeMonth(-1)} aria-label="החודש הקודם">→ החודש הקודם</button><strong>חודש {hebrewMonthLabel(date)}</strong><button className="button" onClick={() => onChangeMonth(1)} aria-label="החודש הבא">החודש הבא ←</button></div>
-    {events.length > 0 ? <div className="calendar-events">{events.map(event => <button key={event.id} className={`calendar-event ${event.type}`} onClick={() => { onSelectPerson(event.personIds[0]); onClose(); }}><span className="calendar-event-icon">{eventIcon(event.type)}</span><div className="calendar-event-body"><strong>{event.label}</strong><small>{event.date}</small></div><span className={`calendar-event-tag ${event.type}`}>{eventTypeLabel(event.type)}</span></button>)}</div> : <div className="birthday-empty calendar-empty"><span className="calendar-empty-icon" aria-hidden="true">🗓️</span><p>אין אירועים רשומים בחודש {hebrewMonthLabel(date)}</p><small>נסו לעבור לחודש הקודם או הבא</small></div>}
-  </section></div>;
+function HebrewCalendarPanel({
+  date,
+  onChangeMonth,
+  onResetToCurrentMonth,
+  events,
+  graph,
+  onClose,
+  onSelectPerson,
+}: {
+  date: Date;
+  onChangeMonth: (direction: -1 | 1) => void;
+  onResetToCurrentMonth?: () => void;
+  events: ReturnType<typeof monthlyEvents>;
+  graph: FamilyGraph;
+  onClose: () => void;
+  onSelectPerson: (id: string) => void;
+}) {
+  const [filterType, setFilterType] = useState<"all" | "birthday" | "memorial" | "anniversary">("all");
+  const monthName = hebrewMonthLabel(date);
+  const isCurrentHebrewMonth = useMemo(() => {
+    return currentHebrewMonth(new Date()) === monthName;
+  }, [monthName]);
+
+  const counts = useMemo(() => {
+    const birthday = events.filter(e => e.type === "birthday").length;
+    const memorial = events.filter(e => e.type === "memorial").length;
+    const anniversary = events.filter(e => e.type === "anniversary").length;
+    return { all: events.length, birthday, memorial, anniversary };
+  }, [events]);
+
+  const filteredEvents = useMemo(() => {
+    if (filterType === "all") return events;
+    return events.filter(e => e.type === filterType);
+  }, [events, filterType]);
+
+  return (
+    <div
+      className="overlay overlay-calendar"
+      role="presentation"
+      onPointerDown={event => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="panel calendar-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="hebrew-calendar-title"
+      >
+        <div className="panel-header calendar-panel-header">
+          <div className="calendar-panel-title-wrap">
+            <span className="calendar-title-badge">🗓️</span>
+            <div>
+              <h2 id="hebrew-calendar-title">אירועים משפחתיים לפי לוח עברי</h2>
+              <p className="calendar-panel-subtitle">
+                ימי הולדת, אזכרות וימי נישואין בחודש {monthName}
+              </p>
+            </div>
+          </div>
+          <button className="button ghost close-btn" aria-label="סגירת לוח השנה" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div className="calendar-heading">
+          <button
+            type="button"
+            className="button calendar-nav-btn"
+            onClick={() => onChangeMonth(-1)}
+            aria-label="החודש הקודם"
+            title="חודש קודם"
+          >
+            → החודש הקודם
+          </button>
+
+          <div className="calendar-current-month-display">
+            <span className="calendar-month-crown">חודש</span>
+            <strong className="calendar-month-name">{monthName}</strong>
+            {!isCurrentHebrewMonth && onResetToCurrentMonth && (
+              <button
+                type="button"
+                className="calendar-today-btn"
+                onClick={onResetToCurrentMonth}
+                title="חזרה לחודש הנוכחי"
+              >
+                חזרה להיום ↩
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="button calendar-nav-btn"
+            onClick={() => onChangeMonth(1)}
+            aria-label="החודש הבא"
+            title="חודש הבא"
+          >
+            החודש הבא ←
+          </button>
+        </div>
+
+        {events.length > 0 && (
+          <div className="calendar-filter-bar" role="tablist" aria-label="סינון אירועים לפי סוג">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterType === "all"}
+              className={`calendar-tab ${filterType === "all" ? "active" : ""}`}
+              onClick={() => setFilterType("all")}
+            >
+              הכל <span className="tab-count">{counts.all}</span>
+            </button>
+            {counts.birthday > 0 && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={filterType === "birthday"}
+                className={`calendar-tab birthday ${filterType === "birthday" ? "active" : ""}`}
+                onClick={() => setFilterType("birthday")}
+              >
+                🎂 ימי הולדת <span className="tab-count">{counts.birthday}</span>
+              </button>
+            )}
+            {counts.memorial > 0 && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={filterType === "memorial"}
+                className={`calendar-tab memorial ${filterType === "memorial" ? "active" : ""}`}
+                onClick={() => setFilterType("memorial")}
+              >
+                🕯️ אזכרות <span className="tab-count">{counts.memorial}</span>
+              </button>
+            )}
+            {counts.anniversary > 0 && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={filterType === "anniversary"}
+                className={`calendar-tab anniversary ${filterType === "anniversary" ? "active" : ""}`}
+                onClick={() => setFilterType("anniversary")}
+              >
+                💍 ימי נישואין <span className="tab-count">{counts.anniversary}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {filteredEvents.length > 0 ? (
+          <div className="calendar-events-list">
+            {filteredEvents.map(event => {
+              const persons = event.personIds
+                .map(id => graph.people.find(p => p.id === id))
+                .filter((p): p is Person => Boolean(p));
+
+              const mainPerson = persons[0];
+              const age = mainPerson ? ageLabel(mainPerson) : undefined;
+
+              return (
+                <article
+                  key={event.id}
+                  className={`calendar-event-card ${event.type}`}
+                >
+                  <div className="calendar-event-card-top">
+                    <div className="calendar-event-icon-box" aria-hidden="true">
+                      <span>{eventIcon(event.type)}</span>
+                    </div>
+
+                    <div className="calendar-event-title-area">
+                      <div className="calendar-event-title-row">
+                        <h4 className="calendar-event-label">{event.label}</h4>
+                        <span className={`calendar-event-tag ${event.type}`}>
+                          {eventTypeLabel(event.type)}
+                        </span>
+                      </div>
+
+                      <div className="calendar-event-meta-row">
+                        <span className="calendar-event-date-chip">
+                          📅 {event.date}
+                        </span>
+                        {event.type === "birthday" && age && (
+                          <span className="calendar-event-age-chip">
+                            גיל {age}
+                          </span>
+                        )}
+                        {event.type === "memorial" && mainPerson?.deathYear && (
+                          <span className="calendar-event-memorial-chip">
+                            נפטר/ה בשנת {mainPerson.deathYear}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {persons.length > 0 ? (
+                    <div className="calendar-event-actions-bar">
+                      {persons.map(person => (
+                        <button
+                          key={person.id}
+                          type="button"
+                          className="calendar-card-action-btn"
+                          onClick={() => {
+                            onSelectPerson(person.id);
+                            onClose();
+                          }}
+                          title={`פתיחת כרטיס של ${person.name}`}
+                        >
+                          <div className="calendar-btn-person-info">
+                            <Avatar person={person} size="small" />
+                            <span className="calendar-btn-person-name">{person.name}</span>
+                          </div>
+                          <span className="calendar-btn-cta">
+                            לכרטיס המלא <span aria-hidden="true">↗</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="calendar-empty-state">
+            <span className="calendar-empty-illustration" aria-hidden="true">
+              {filterType === "birthday" ? "🎂" : filterType === "memorial" ? "🕯️" : "🗓️"}
+            </span>
+            <h3>
+              {filterType === "all"
+                ? `אין אירועים רשומים בחודש ${monthName}`
+                : `אין אירועים מסוג זה בחודש ${monthName}`}
+            </h3>
+            <p>נסו לעבור לחודש הקודם או הבא בלוח העברי</p>
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
 const hebrewBirthMonths = ["תשרי", "חשוון", "כסלו", "טבת", "שבט", "אדר א׳", "אדר ב׳", "ניסן", "אייר", "סיוון", "תמוז", "אב", "אלול"];
@@ -717,72 +949,6 @@ function PhotoQuickChangeModal({
   );
 }
 
-function CumulativeFamilyTree({ graph, root, onClose, onOpenProfile }: { graph: FamilyGraph; root: Person; onClose: () => void; onOpenProfile?: (id: string) => void }) {
-  const peopleById = new Map(graph.people.map(person => [person.id, person]));
-  const parents = new Map<string, string[]>();
-  const children = new Map<string, string[]>();
-  for (const relationship of graph.relationships) {
-    if (relationship.type !== "parent") continue;
-    parents.set(relationship.targetId, [...(parents.get(relationship.targetId) ?? []), relationship.sourceId]);
-    children.set(relationship.sourceId, [...(children.get(relationship.sourceId) ?? []), relationship.targetId]);
-  }
-  const initialVisibleIds = new Set([root.id, ...(parents.get(root.id) ?? []), ...(children.get(root.id) ?? [])]);
-  const [visibleIdsState, setVisibleIdsState] = useState<Set<string>>(() => initialVisibleIds);
-  const [history, setHistory] = useState<{ visibleIds: Set<string>; selectedId: string }[]>([]);
-  const [selectedId, setSelectedId] = useState(root.id);
-  useEffect(() => { setVisibleIdsState(new Set([root.id, ...(parents.get(root.id) ?? []), ...(children.get(root.id) ?? [])])); setHistory([]); setSelectedId(root.id); }, [root.id]);
-
-  const visibleIds = visibleIdsState;
-  const distance = new Map<string, number>([[root.id, 0]]);
-  const queue = [root.id];
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    const currentDistance = distance.get(id)!;
-    const connected = [...(parents.get(id) ?? []).map(parentId => [parentId, -1] as const), ...(children.get(id) ?? []).map(childId => [childId, 1] as const)];
-    connected.forEach(([nextId, direction]) => { if (!distance.has(nextId)) { distance.set(nextId, currentDistance + direction); queue.push(nextId); } });
-  }
-  const rows = new Map<number, Person[]>();
-  [...visibleIds].forEach(id => { const person = peopleById.get(id); const level = distance.get(id); if (!person || level === undefined) return; rows.set(level, [...(rows.get(level) ?? []), person]); });
-  const sortedLevels = [...rows.keys()].sort((a, b) => a - b);
-  const generationLabel = (level: number) => level === 0 ? "נקודת המוצא" : level === -1 ? "הורים (דור מעל)" : level === 1 ? "ילדים (דור מתחת)" : level < 0 ? `${Math.abs(level)} דורות מעל` : `${level} דורות מתחת`;
-  const generationCount = sortedLevels.length;
-  const visibleCount = visibleIds.size;
-  const pathIds = new Set<string>([root.id, selectedId]);
-  const pathPrevious = new Map<string, string>();
-  const pathQueue = [root.id];
-  const pathSeen = new Set([root.id]);
-  while (pathQueue.length > 0 && !pathSeen.has(selectedId)) {
-    const id = pathQueue.shift()!;
-    const connected = [...(parents.get(id) ?? []), ...(children.get(id) ?? [])];
-    connected.forEach(nextId => { if (!pathSeen.has(nextId)) { pathSeen.add(nextId); pathPrevious.set(nextId, id); pathQueue.push(nextId); } });
-  }
-  let pathCursor = selectedId;
-  while (pathPrevious.has(pathCursor)) { pathIds.add(pathCursor); pathCursor = pathPrevious.get(pathCursor)!; }
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-  const explore = (personId: string) => {
-    const nextVisibleIds = new Set(visibleIdsState);
-    nextVisibleIds.add(root.id);
-    nextVisibleIds.add(personId);
-    (parents.get(personId) ?? []).forEach(parentId => nextVisibleIds.add(parentId));
-    (children.get(personId) ?? []).forEach(childId => nextVisibleIds.add(childId));
-    setHistory(previous => [...previous, { visibleIds: new Set(visibleIdsState), selectedId }]);
-    setVisibleIdsState(nextVisibleIds);
-    setSelectedId(personId);
-  };
-  const goBack = () => { const previous = history.at(-1); if (!previous) return; setHistory(current => current.slice(0, -1)); setVisibleIdsState(previous.visibleIds); setSelectedId(previous.selectedId); };
-  const resetTree = () => { setVisibleIdsState(new Set(initialVisibleIds)); setHistory([]); setSelectedId(root.id); };
-  const selectedPerson = peopleById.get(selectedId);
-  return <div className="overlay lineage-overlay" role="dialog" aria-modal="true" aria-labelledby="lineage-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="panel lineage-panel">
-    <div className="lineage-hero"><div className="lineage-hero-mark" aria-hidden="true">🌿</div><div><span className="lineage-eyebrow">סייר שושלת ודורות</span><h2 id="lineage-title">עץ הדורות סביב {root.name}</h2><p className="lineage-subtitle">לחצו על כל אדם כדי לחשוף את ההורים והילדים שלו לאורך הדורות</p></div><div className="lineage-header-actions"><button className="button lineage-back" disabled={history.length === 0} onClick={goBack} aria-label="חזרה לצעד הקודם">↩ <span>חזרה</span></button><button className="button lineage-reset" onClick={resetTree} aria-label="איפוס עץ הדורות">⌂ <span>איפוס</span></button><button className="button ghost lineage-close" onClick={onClose} aria-label="סגירת עץ הדורות">✕</button></div></div>
-    <div className="lineage-summary" aria-label="סיכום התצוגה"><div><strong>{generationCount}</strong><span>דורות מוצגים</span></div><div><strong>{visibleCount}</strong><span>בני משפחה</span></div><div className="lineage-summary-hint"><span className="lineage-pulse" aria-hidden="true" /> <span>נבחר כעת: <strong>{selectedPerson?.name ?? root.name}</strong></span>{onOpenProfile && selectedPerson && <button className="button small-btn" onClick={() => { onOpenProfile(selectedPerson.id); onClose(); }}>לכרטיס האישי</button>}</div></div>
-    <div className="lineage-scroll">{sortedLevels.map(level => <div className={`lineage-level ${level === 0 ? "current" : ""} ${rows.get(level)!.some(person => pathIds.has(person.id)) ? "lineage-level-path" : ""}`} key={level}><div className="lineage-level-heading"><span className="lineage-level-label">{generationLabel(level)}</span><span className="lineage-level-count">{rows.get(level)!.length} {rows.get(level)!.length === 1 ? "אדם" : "אנשים"}</span></div><div className="lineage-people">{rows.get(level)!.map(person => <button key={person.id} className={`lineage-person ${person.id === root.id ? "anchor" : ""} ${person.id === selectedId ? "root" : ""} ${pathIds.has(person.id) ? "path" : ""}`} onClick={() => explore(person.id)} aria-pressed={person.id === selectedId}><span className={`lineage-avatar ${person.gender}`}>{person.name.trim().charAt(0)}</span><span className="lineage-person-name">{person.name}</span>{person.role?.trim() && <small>{person.role}</small>}{person.id === root.id && <span className="lineage-selected-label">נקודת מוצא</span>}{person.id === selectedId && person.id !== root.id && <span className="lineage-selected-label">נבחר/ה כעת</span>}</button>)}</div></div>)}</div>
-  </section></div>;
-}
-
 function ProfileViewPanel({
   person,
   graph,
@@ -794,7 +960,6 @@ function ProfileViewPanel({
   onFocusOnMap,
   onOpenInExplorer,
   onFilter,
-  onShowLineage,
   onEdit,
   onAddRelative,
   onUpdatePhoto,
@@ -809,7 +974,6 @@ function ProfileViewPanel({
   onFocusOnMap: () => void;
   onOpenInExplorer: () => void;
   onFilter: () => void;
-  onShowLineage: () => void;
   onEdit: () => void;
   onAddRelative: () => void;
   onUpdatePhoto?: (url: string | undefined) => void;
@@ -1053,7 +1217,6 @@ function ProfileViewPanel({
           <button className="button primary" onClick={onFocusOnMap}>🎯 מיקוד במפת העץ</button>
           <button className="button" onClick={onOpenInExplorer}>🧭 פתיחה בסייר המשפחה</button>
           {childrenCount > 0 && <button className="button" onClick={onFilter}>🌿 הצג ענף צאצאים בלבד</button>}
-          <button className="button lineage-button" onClick={onShowLineage}>🌳 עץ דורות</button>
         </div>
       </div>
     </div>
@@ -1077,29 +1240,336 @@ function ProfileViewPanel({
   </div>;
 }
 
-function EditablePersonPanel({ person, marriageDate, onClose, onBackToView, onSave, onDelete, onShowLineage }: { person: Person; marriageDate?: string; onClose: () => void; onBackToView: () => void; onSave: (p: Person) => void; onDelete: (personId: string) => void; onShowLineage: () => void }) {
+type NewPersonDetails = Omit<Person, "id" | "familyId">;
+
+function PersonLivePreview({ person }: { person: { name?: string; gender?: string; isAlive?: boolean; profileImageUrl?: string; birthYear?: number; deathYear?: number; role?: string } }) {
+  const initial = person.name?.trim().charAt(0) || "?";
+  const isDeceased = person.isAlive === false || person.deathYear !== undefined;
+  const gender = person.gender ?? "neutral";
+
+  return (
+    <div className={`editor-live-preview ${gender} ${isDeceased ? "deceased" : ""}`}>
+      <div className="live-preview-avatar">
+        {person.profileImageUrl ? (
+          <img src={person.profileImageUrl} alt="" className="live-preview-img" />
+        ) : (
+          <span className={`live-preview-initial ${gender}`}>{initial}</span>
+        )}
+      </div>
+      <div className="live-preview-info">
+        <div className="live-preview-badges">
+          <span className={`live-badge gender ${gender}`}>
+            {gender === "male" ? "זכר" : gender === "female" ? "נקבה" : "לא צוין"}
+          </span>
+          <span className={`live-badge status ${isDeceased ? "deceased" : "alive"}`}>
+            {isDeceased ? "🕯️ נפטר/ה" : "🌿 בחיים"}
+          </span>
+          {person.role?.trim() && <span className="live-badge role">{person.role}</span>}
+        </div>
+        <strong className="live-preview-name">{person.name?.trim() || "שם מלא..."}</strong>
+        {(person.birthYear || person.deathYear) && (
+          <span className="live-preview-years">
+            📅 {person.birthYear ?? "???"}{person.deathYear ? `–${person.deathYear}` : isDeceased ? "–???" : ""}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PersonFormFields<T extends NewPersonDetails>({
+  draft,
+  update,
+  marriageDate,
+  hebrewMarriageDate,
+  onMarriageDateChange,
+}: {
+  draft: T;
+  update: <K extends keyof T>(key: K, value: T[K]) => void;
+  marriageDate?: string;
+  hebrewMarriageDate?: string;
+  onMarriageDateChange?: (value: string | undefined) => void;
+}) {
+  return (
+    <div className="editor-form-sections">
+      {/* 1. Identity & Role */}
+      <div className="editor-card">
+        <div className="editor-card-header">
+          <span className="editor-card-icon">👤</span>
+          <div>
+            <h4>פרטים אישיים בסיסיים</h4>
+            <small>שם מלא, כינוי ומגדר</small>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <label className="field full">
+            <span className="field-label-required">שם מלא *</span>
+            <input
+              autoFocus
+              placeholder="לדוגמה: יצחק אילון"
+              value={draft.name}
+              onChange={e => update("name" as keyof T, e.target.value as any)}
+            />
+          </label>
+
+          <label className="field">
+            <span>שם משפחה קודם (נעורים)</span>
+            <input
+              placeholder="לדוגמה: אלבז"
+              value={draft.previousLastName ?? ""}
+              onChange={e => update("previousLastName" as keyof T, (e.target.value || undefined) as any)}
+            />
+          </label>
+
+          <label className="field">
+            <span>כינוי או תפקיד במשפחה</span>
+            <input
+              placeholder="לדוגמה: סבא רבא, מורה הקהילה"
+              value={draft.role ?? ""}
+              onChange={e => update("role" as keyof T, (e.target.value || undefined) as any)}
+            />
+          </label>
+
+          <div className="field">
+            <span>מגדר</span>
+            <div className="segmented-control" role="radiogroup" aria-label="מגדר">
+              <button
+                type="button"
+                className={`segmented-item ${draft.gender === "male" ? "active male" : ""}`}
+                onClick={() => update("gender" as keyof T, "male" as any)}
+              >
+                <span>👨</span> <strong>זכר</strong>
+              </button>
+              <button
+                type="button"
+                className={`segmented-item ${draft.gender === "female" ? "active female" : ""}`}
+                onClick={() => update("gender" as keyof T, "female" as any)}
+              >
+                <span>👩</span> <strong>נקבה</strong>
+              </button>
+              <button
+                type="button"
+                className={`segmented-item ${draft.gender === "neutral" ? "active neutral" : ""}`}
+                onClick={() => update("gender" as keyof T, "neutral" as any)}
+              >
+                <span>👤</span> <strong>לא צוין</strong>
+              </button>
+            </div>
+          </div>
+
+          <div className="field">
+            <span>סטטוס חיים</span>
+            <div className="segmented-control" role="radiogroup" aria-label="סטטוס חיים">
+              <button
+                type="button"
+                className={`segmented-item ${draft.isAlive ? "active alive" : ""}`}
+                onClick={() => update("isAlive" as keyof T, true as any)}
+              >
+                <span>🌿</span> <strong>בחיים</strong>
+              </button>
+              <button
+                type="button"
+                className={`segmented-item ${!draft.isAlive ? "active deceased" : ""}`}
+                onClick={() => update("isAlive" as keyof T, false as any)}
+              >
+                <span>🕯️</span> <strong>נפטר/ה</strong>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Birth & Dates */}
+      <div className="editor-card">
+        <div className="editor-card-header">
+          <span className="editor-card-icon">📅</span>
+          <div>
+            <h4>לידה ותאריכים</h4>
+            <small>תאריכי לידה עבריים ולועזיים ומקום הלידה</small>
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <label className="field full">
+            <span>מקום לידה (ארץ / עיר)</span>
+            <input
+              placeholder="לדוגמה: קזבלנקה, מרוקו או טבריה, ישראל"
+              value={draft.birthCountry ?? ""}
+              onChange={e => update("birthCountry" as keyof T, (e.target.value || undefined) as any)}
+            />
+          </label>
+
+          <BirthDateFields
+            birthDate={draft.birthDate}
+            hebrewBirthDate={draft.hebrewBirthDate}
+            onChange={(key, val) => update(key as keyof T, val as any)}
+          />
+
+          {marriageDate && (
+            <div className="field full">
+              <span>יום נישואין</span>
+              <strong>{marriageDate}</strong>
+            </div>
+          )}
+
+          {onMarriageDateChange && (
+            <div className="full">
+              <HebrewDateFields
+                value={hebrewMarriageDate}
+                label="תאריך נישואין עברי (אופציונלי)"
+                onChange={onMarriageDateChange}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Memorial (Visible when deceased) */}
+      {!draft.isAlive && (
+        <div className="editor-card memorial-card">
+          <div className="editor-card-header">
+            <span className="editor-card-icon">🕯️</span>
+            <div>
+              <h4>פרטי פטירה וזיכרון</h4>
+              <small>מוצג עבור בני משפחה שנפטרו לזכרון עולם</small>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <label className="field">
+              <span>שנת פטירה לועזית</span>
+              <input
+                type="number"
+                placeholder="לדוגמה: 1995"
+                value={draft.deathYear ?? ""}
+                onChange={e => update("deathYear" as keyof T, (e.target.value ? Number(e.target.value) : undefined) as any)}
+              />
+            </label>
+
+            <HebrewDateFields
+              value={draft.hebrewDeathDate}
+              label="תאריך פטירה עברי"
+              onChange={val => update("hebrewDeathDate" as keyof T, val as any)}
+            />
+
+            <label className="field full">
+              <span>מקום קבורה / בית עלמין</span>
+              <input
+                placeholder="לדוגמה: בית העלמין הישן בטבריה"
+                value={draft.burialPlace ?? ""}
+                onChange={e => update("burialPlace" as keyof T, (e.target.value || undefined) as any)}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Profile Photo */}
+      <div className="editor-card">
+        <div className="editor-card-header">
+          <span className="editor-card-icon">📷</span>
+          <div>
+            <h4>תמונת פרופיל</h4>
+            <small>העלאת תמונה ישירות מהמכשיר או קישור לתמונה ברשת</small>
+          </div>
+        </div>
+
+        <ProfileImageField
+          value={draft.profileImageUrl}
+          onChange={url => update("profileImageUrl" as keyof T, url as any)}
+        />
+      </div>
+
+      {/* 5. Life Story */}
+      <div className="editor-card">
+        <div className="editor-card-header">
+          <span className="editor-card-icon">📖</span>
+          <div>
+            <h4>סיפור חיים, זיכרונות ומורשת</h4>
+            <small>קורות חיים, פועלם, אנקדוטות וסיפורים משפחתיים</small>
+          </div>
+        </div>
+
+        <label className="field full">
+          <textarea
+            rows={4}
+            placeholder="כתבו כאן סיפור חיים, זיכרונות מהבית, פועלם ותפקידיהם, אנקדוטות מעניינות או כל פרט שמחבר את הדורות…"
+            value={draft.lifeStory ?? ""}
+            onChange={e => update("lifeStory" as keyof T, (e.target.value || undefined) as any)}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function EditablePersonPanel({
+  person,
+  marriageDate,
+  onClose,
+  onBackToView,
+  onSave,
+  onDelete,
+}: {
+  person: Person;
+  marriageDate?: string;
+  onClose: () => void;
+  onBackToView: () => void;
+  onSave: (p: Person) => void;
+  onDelete: (personId: string) => void;
+}) {
   const [draft, setDraft] = useState(person);
   const update = <K extends keyof Person>(key: K, value: Person[K]) => setDraft(current => ({ ...current, [key]: value }));
-  return <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><div className="panel"><div className="panel-header"><div><h2>✏️ עריכת פרטים — {person.name}</h2></div><div className="panel-header-buttons"><button className="button small-btn" onClick={onBackToView}>חזרה לכרטיס</button><button className="button ghost" onClick={onClose} aria-label="סגירה">✕</button></div></div><div className="form-grid">
-    <label className="field full">שם מלא<input value={draft.name} onChange={event => update("name", event.target.value)} /></label>
-    <label className="field">שם משפחה קודם (נעורים)<input value={draft.previousLastName ?? ""} onChange={event => update("previousLastName", event.target.value || undefined)} /></label>
-    <label className="field">תפקיד / כינוי במשפחה<input value={draft.role ?? ""} onChange={event => update("role", event.target.value || undefined)} /></label>
-    <label className="field">מגדר<select value={draft.gender} onChange={event => update("gender", event.target.value as Person["gender"])}><option value="neutral">לא צוין</option><option value="male">זכר</option><option value="female">נקבה</option></select></label>
-    <label className="field">סטטוס חיים<select value={String(draft.isAlive)} onChange={event => update("isAlive", event.target.value === "true")}><option value="true">בחיים</option><option value="false">נפטר/ה</option></select></label>
-    <BirthDateFields birthDate={draft.birthDate} hebrewBirthDate={draft.hebrewBirthDate} onChange={(key, value) => update(key, value)} />
-    {marriageDate && <div className="field"><span>יום נישואין</span><strong>{marriageDate}</strong></div>}
-    {(!draft.isAlive || draft.deathYear !== undefined || draft.hebrewDeathDate) && (
-      <>
-        <label className="field">שנת פטירה לועזית<input type="number" value={draft.deathYear ?? ""} onChange={event => update("deathYear", event.target.value ? Number(event.target.value) : undefined)} /></label>
-        <HebrewDateFields value={draft.hebrewDeathDate} label="תאריך פטירה עברי" onChange={value => update("hebrewDeathDate", value)} />
-      </>
-    )}
-    <label className="field">מקום לידה<input value={draft.birthCountry ?? ""} onChange={event => update("birthCountry", event.target.value || undefined)} /></label>
-    <label className="field">מקום קבורה<input value={draft.burialPlace ?? ""} onChange={event => update("burialPlace", event.target.value || undefined)} /></label>
-    <ProfileImageField value={draft.profileImageUrl} onChange={value => update("profileImageUrl", value)} />
-    <label className="field full">סיפור חיים וקורות<textarea rows={4} placeholder="כתבו כאן זיכרונות, קורות חיים או פרטים מעניינים…" value={draft.lifeStory ?? ""} onChange={event => update("lifeStory", event.target.value || undefined)} /></label>
-    <div className="panel-actions full"><button className="button danger" onClick={() => { if (window.confirm(`האם למחוק את ${person.name}? פעולה זו תמחק גם את הקשרים שלו.`)) onDelete(person.id); }}>מחיקת אדם</button><span className="panel-actions-spacer" /><button className="button lineage-button" onClick={onShowLineage}>עץ דורות</button><button className="button" onClick={onBackToView}>ביטול</button><button className="button primary" disabled={!draft.name.trim()} onClick={() => onSave({ ...draft, name: draft.name.trim() })}>שמירת שינויים</button></div>
-  </div></div></div>;
+
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="panel editor-panel">
+        <div className="panel-header">
+          <div>
+            <h2>✏️ עריכת פרטי אדם</h2>
+            <p className="modal-subtitle">עדכון מידע, תאריכים ותמונת פרופיל עבור <strong>{person.name}</strong></p>
+          </div>
+          <div className="panel-header-buttons">
+            <button type="button" className="button small-btn" onClick={onBackToView}>חזרה לכרטיס</button>
+            <button type="button" className="button ghost" onClick={onClose} aria-label="סגירה">✕</button>
+          </div>
+        </div>
+
+        <PersonLivePreview person={draft} />
+
+        <PersonFormFields
+          draft={draft}
+          update={update}
+          marriageDate={marriageDate}
+        />
+
+        <div className="panel-actions full sticky-actions">
+          <button
+            type="button"
+            className="button danger-outline"
+            onClick={() => {
+              if (window.confirm(`האם למחוק את ${person.name}? פעולה זו תמחק גם את הקשרים שלו.`)) {
+                onDelete(person.id);
+              }
+            }}
+          >
+            🗑️ מחיקת אדם
+          </button>
+          <span className="panel-actions-spacer" />
+          <button type="button" className="button" onClick={onBackToView}>ביטול</button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={!draft.name.trim()}
+            onClick={() => onSave({ ...draft, name: draft.name.trim() })}
+          >
+            ✓ שמירת שינויים
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PersonPanel({
@@ -1114,7 +1584,6 @@ function PersonPanel({
   onFocusOnMap,
   onOpenInExplorer,
   onFilter,
-  onShowLineage,
   onAddRelative,
   canEdit,
 }: {
@@ -1129,7 +1598,6 @@ function PersonPanel({
   onFocusOnMap: () => void;
   onOpenInExplorer: () => void;
   onFilter: () => void;
-  onShowLineage: () => void;
   onAddRelative: () => void;
   canEdit: boolean;
 }) {
@@ -1145,7 +1613,6 @@ function PersonPanel({
         onBackToView={() => setIsEditing(false)}
         onSave={onSave}
         onDelete={onDelete}
-        onShowLineage={onShowLineage}
       />
     );
   }
@@ -1162,15 +1629,12 @@ function PersonPanel({
       onFocusOnMap={onFocusOnMap}
       onOpenInExplorer={onOpenInExplorer}
       onFilter={onFilter}
-      onShowLineage={onShowLineage}
       onEdit={() => setIsEditing(true)}
       onAddRelative={onAddRelative}
       onUpdatePhoto={url => onSave({ ...person, profileImageUrl: url })}
     />
   );
 }
-
-type NewPersonDetails = Omit<Person, "id" | "familyId">;
 
 function ManagePasswordPanel({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [password, setPassword] = useState("");
@@ -1187,7 +1651,22 @@ function ManagePasswordPanel({ onClose, onSuccess }: { onClose: () => void; onSu
   return <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="manage-password-title" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><div className="panel password-panel"><div className="panel-header"><h2 id="manage-password-title">🔐 כניסה למצב עריכה וניהול</h2><button className="button ghost" onClick={onClose} aria-label="סגירה">✕</button></div><p className="modal-subtitle">הזינו את סיסמת הניהול של המשפחה כדי להוסיף או לערוך בני משפחה וקשרים.</p><form className="form-grid" onSubmit={submit}><label className="field full">סיסמת ניהול<input autoFocus type="password" placeholder="הקלידו סיסמה…" value={password} onChange={event => setPassword(event.target.value)} /></label>{error && <p role="alert" className="field-error full">{error}</p>}<div className="panel-actions full"><button type="button" className="button" onClick={onClose}>ביטול</button><button type="submit" className="button primary" disabled={submitting || !password}>{submitting ? "מאמת…" : "כניסה לעריכה"}</button></div></form></div></div>;
 }
 
-function AddRelationshipPanel({ source, people, onClose, onCreate }: { source: Person; people: Person[]; onClose: () => void; onCreate: (type: "partner" | "child" | "parent", targetId: string | null, newPerson: NewPersonDetails | null, relationship?: RelationshipDetails) => void }) {
+function AddRelationshipPanel({
+  source,
+  people,
+  onClose,
+  onCreate,
+}: {
+  source: Person;
+  people: Person[];
+  onClose: () => void;
+  onCreate: (
+    type: "partner" | "child" | "parent",
+    targetId: string | null,
+    newPerson: NewPersonDetails | null,
+    relationship?: RelationshipDetails
+  ) => void;
+}) {
   const [type, setType] = useState<"partner" | "child" | "parent">("child");
   const [mode, setMode] = useState<"new" | "existing">("new");
   const [targetId, setTargetId] = useState("");
@@ -1195,100 +1674,259 @@ function AddRelationshipPanel({ source, people, onClose, onCreate }: { source: P
   const [draft, setDraft] = useState<NewPersonDetails>({ name: "", gender: "neutral", isAlive: true });
   const [hebrewMarriageDate, setHebrewMarriageDate] = useState("");
   const update = <K extends keyof NewPersonDetails>(key: K, value: NewPersonDetails[K]) => setDraft(current => ({ ...current, [key]: value }));
+
   const existingPeople = useMemo(() => {
     const candidates = people.filter(person => person.id !== source.id);
     if (!existingFilter.trim()) return candidates;
-    return candidates.filter(p => p.name.includes(existingFilter.trim()));
+    const q = existingFilter.trim().toLowerCase();
+    return candidates.filter(p => p.name.toLowerCase().includes(q) || (p.previousLastName && p.previousLastName.toLowerCase().includes(q)));
   }, [people, source.id, existingFilter]);
 
-  return <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><div className="panel"><div className="panel-header"><h2>הוספת בן משפחה עבור {source.name}</h2><button className="button ghost" onClick={onClose} aria-label="סגירה">✕</button></div>
-    <div className="form-grid">
-      <div className="field full">
-        <span>איזה קשר משפחתי תרצו להוסיף ל<strong>{source.name}</strong>?</span>
-        <div className="relation-type-cards" role="radiogroup" aria-label="סוג קשר">
-          <button type="button" className={`relation-type-card ${type === "child" ? "active" : ""}`} onClick={() => setType("child")}>
-            <span className="relation-type-icon">👶</span>
-            <strong>ילד או ילדה</strong>
-            <small>יתווסף בדור הבא</small>
-          </button>
-          <button type="button" className={`relation-type-card ${type === "partner" ? "active" : ""}`} onClick={() => {
-            setType("partner");
-            if (source.gender === "male") update("gender", "female");
-            else if (source.gender === "female") update("gender", "male");
-          }}>
-            <span className="relation-type-icon">💍</span>
-            <strong>{source.gender === "male" ? "בת זוג" : "בן זוג"}</strong>
-            <small>{source.gender === "male" ? `תתווסף לצד ${source.name}` : `יתווסף לצד ${source.name}`}</small>
-          </button>
-          <button type="button" className={`relation-type-card ${type === "parent" ? "active" : ""}`} onClick={() => setType("parent")}>
-            <span className="relation-type-icon">⬆️</span>
-            <strong>אב או אם (הורה)</strong>
-            <small>יתווסף בדור שמעל</small>
-          </button>
+  const selectedTargetPerson = useMemo(() => people.find(p => p.id === targetId), [people, targetId]);
+
+  const relationLabel = type === "child" ? "ילד/ה" : type === "partner" ? (source.gender === "male" ? "בת זוג" : "בן זוג") : "הורה";
+
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="panel editor-panel">
+        <div className="panel-header">
+          <div>
+            <h2>➕ הוספת קשר משפחתי</h2>
+            <p className="modal-subtitle">הוספת קשר עבור <strong>{source.name}</strong></p>
+          </div>
+          <button type="button" className="button ghost" onClick={onClose} aria-label="סגירה">✕</button>
         </div>
-      </div>
 
-      {type === "partner" && <div className="full"><HebrewDateFields value={hebrewMarriageDate} label="תאריך נישואין עברי (אופציונלי)" onChange={value => setHebrewMarriageDate(value ?? "")} /></div>}
+        {/* Step 1: Relationship Type */}
+        <div className="editor-card step-card">
+          <div className="editor-card-header">
+            <span className="editor-card-icon">🔗</span>
+            <div>
+              <h4>שלב 1: איזה קשר תרצו להוסיף ל{source.name}?</h4>
+              <small>בחרו את סוג הקשר המשפחתי</small>
+            </div>
+          </div>
 
-      <div className="relationship-mode-tabs full">
-        <button type="button" className={`mode-tab ${mode === "new" ? "active" : ""}`} onClick={() => setMode("new")}>✨ יצירת אדם חדש בעץ</button>
-        <button type="button" className={`mode-tab ${mode === "existing" ? "active" : ""}`} onClick={() => setMode("existing")}>🔗 חיבור לאדם שכבר קיים בעץ</button>
-      </div>
-
-      {mode === "existing" ? (
-        <div className="field full">
-          <span>בחירת אדם קיים מהעץ</span>
-          <input placeholder="סינון מהיר לפי שם…" value={existingFilter} onChange={e => setExistingFilter(e.target.value)} />
-          <select value={targetId} onChange={event => setTargetId(event.target.value)} size={Math.min(6, Math.max(3, existingPeople.length + 1))}>
-            <option value="">— בחרו אדם מהרשימה —</option>
-            {existingPeople.map(person => <option key={person.id} value={person.id}>{person.name}{person.birthYear ? ` (${person.birthYear})` : ""}</option>)}
-          </select>
+          <div className="relation-type-cards" role="radiogroup" aria-label="סוג קשר משפחתי">
+            <button
+              type="button"
+              className={`relation-type-card ${type === "child" ? "active" : ""}`}
+              onClick={() => setType("child")}
+            >
+              <span className="relation-type-icon">👶</span>
+              <strong>ילד או ילדה</strong>
+              <small>דור מתחת ל{source.name}</small>
+            </button>
+            <button
+              type="button"
+              className={`relation-type-card ${type === "partner" ? "active" : ""}`}
+              onClick={() => {
+                setType("partner");
+                if (source.gender === "male") update("gender", "female");
+                else if (source.gender === "female") update("gender", "male");
+              }}
+            >
+              <span className="relation-type-icon">💍</span>
+              <strong>{source.gender === "male" ? "בת זוג" : "בן זוג"}</strong>
+              <small>לצד {source.name}</small>
+            </button>
+            <button
+              type="button"
+              className={`relation-type-card ${type === "parent" ? "active" : ""}`}
+              onClick={() => setType("parent")}
+            >
+              <span className="relation-type-icon">⬆️</span>
+              <strong>אב או אם (הורה)</strong>
+              <small>דור מעל {source.name}</small>
+            </button>
+          </div>
         </div>
-      ) : <>
-        <label className="field full">שם מלא (חובה)<input autoFocus placeholder="לדוגמה: דניאל אילון" value={draft.name} onChange={event => update("name", event.target.value)} /></label>
-        <label className="field">מגדר<select value={draft.gender} onChange={event => update("gender", event.target.value as Person["gender"])}><option value="neutral">לא צוין</option><option value="male">זכר</option><option value="female">נקבה</option></select></label>
-        <label className="field">סטטוס<select value={String(draft.isAlive)} onChange={event => update("isAlive", event.target.value === "true")}><option value="true">בחיים</option><option value="false">נפטר/ה</option></select></label>
-        <label className="field">שם משפחה קודם<input value={draft.previousLastName ?? ""} onChange={event => update("previousLastName", event.target.value || undefined)} /></label>
-        <label className="field">תפקיד / כינוי<input value={draft.role ?? ""} onChange={event => update("role", event.target.value || undefined)} /></label>
-        <BirthDateFields birthDate={draft.birthDate} hebrewBirthDate={draft.hebrewBirthDate} onChange={(key, value) => update(key, value)} />
-        {!draft.isAlive && (
+
+        {/* Step 2: Connection Mode */}
+        <div className="editor-card step-card">
+          <div className="editor-card-header">
+            <span className="editor-card-icon">👥</span>
+            <div>
+              <h4>שלב 2: כיצד להוסיף את ה{relationLabel}?</h4>
+              <small>אדם חדש שאינו רשום בעץ, או חיבור לאדם שכבר קיים</small>
+            </div>
+          </div>
+
+          <div className="relationship-mode-tabs">
+            <button
+              type="button"
+              className={`mode-tab ${mode === "new" ? "active" : ""}`}
+              onClick={() => setMode("new")}
+            >
+              ✨ יצירת אדם חדש בעץ
+            </button>
+            <button
+              type="button"
+              className={`mode-tab ${mode === "existing" ? "active" : ""}`}
+              onClick={() => setMode("existing")}
+            >
+              🔗 חיבור לאדם שכבר קיים בעץ
+            </button>
+          </div>
+        </div>
+
+        {mode === "existing" ? (
+          <div className="editor-card">
+            <div className="editor-card-header">
+              <span className="editor-card-icon">🔍</span>
+              <div>
+                <h4>בחירת אדם קיים מתוך עץ המשפחה</h4>
+                <small>חפשו לפי שם ולחצו על האדם לחיבור</small>
+              </div>
+            </div>
+
+            <div className="existing-people-picker">
+              <div className="existing-people-search-bar">
+                <input
+                  autoFocus
+                  placeholder="הקלידו שם לחיפוש מהיר בעץ…"
+                  value={existingFilter}
+                  onChange={e => setExistingFilter(e.target.value)}
+                />
+                {existingFilter && (
+                  <button
+                    type="button"
+                    className="button ghost small-btn"
+                    onClick={() => setExistingFilter("")}
+                  >
+                    ✕ נקה
+                  </button>
+                )}
+              </div>
+
+              <div className="existing-people-list" role="listbox" aria-label="רשימת בני משפחה קיימים">
+                {existingPeople.length === 0 ? (
+                  <p className="existing-people-empty">לא נמצאו בני משפחה התואמים לחיפוש זה.</p>
+                ) : (
+                  existingPeople.map(person => {
+                    const isSelected = person.id === targetId;
+                    const isDeceased = !person.isAlive || person.deathYear !== undefined;
+                    return (
+                      <button
+                        key={person.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`existing-person-item ${isSelected ? "selected" : ""} ${person.gender}`}
+                        onClick={() => setTargetId(person.id)}
+                      >
+                        <Avatar person={person} size="small" />
+                        <div className="existing-person-info">
+                          <strong className="existing-person-name">{person.name}</strong>
+                          <span className="existing-person-meta">
+                            {isDeceased ? "🕯️ " : ""}
+                            {person.birthYear ? `נולד/ה ${person.birthYear}` : ""}
+                            {person.role ? ` · ${person.role}` : ""}
+                          </span>
+                        </div>
+                        {isSelected && <span className="existing-person-check">✓ נבחר</span>}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {type === "partner" && (
+              <div style={{ marginTop: "0.85rem" }}>
+                <HebrewDateFields
+                  value={hebrewMarriageDate}
+                  label="תאריך נישואין עברי (אופציונלי)"
+                  onChange={value => setHebrewMarriageDate(value ?? "")}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
           <>
-            <label className="field">שנת פטירה<input type="number" value={draft.deathYear ?? ""} onChange={event => update("deathYear", event.target.value ? Number(event.target.value) : undefined)} /></label>
-            <HebrewDateFields value={draft.hebrewDeathDate} label="תאריך פטירה עברי" onChange={value => update("hebrewDeathDate", value)} />
+            <PersonLivePreview person={draft} />
+
+            <PersonFormFields
+              draft={draft}
+              update={update}
+              hebrewMarriageDate={hebrewMarriageDate}
+              onMarriageDateChange={type === "partner" ? val => setHebrewMarriageDate(val ?? "") : undefined}
+            />
           </>
         )}
-        <label className="field">מקום לידה<input value={draft.birthCountry ?? ""} onChange={event => update("birthCountry", event.target.value || undefined)} /></label>
-        <label className="field">מקום קבורה<input value={draft.burialPlace ?? ""} onChange={event => update("burialPlace", event.target.value || undefined)} /></label>
-        <ProfileImageField value={draft.profileImageUrl} onChange={value => update("profileImageUrl", value)} />
-        <label className="field full">סיפור חיים<textarea rows={3} value={draft.lifeStory ?? ""} onChange={event => update("lifeStory", event.target.value || undefined)} /></label>
-      </>}
-      <div className="panel-actions full"><button className="button" onClick={onClose}>ביטול</button><button className="button primary" disabled={mode === "existing" ? !targetId : !draft.name.trim()} onClick={() => { if (mode === "existing" ? !targetId : !draft.name.trim()) return; onCreate(type, mode === "existing" ? targetId : null, mode === "new" ? { ...draft, name: draft.name.trim() } : null, type === "partner" ? { hebrewMarriageDate: hebrewMarriageDate.trim() || undefined } : undefined); }}>שמירת קשר משפחתי</button></div>
+
+        <div className="panel-actions full sticky-actions">
+          <button type="button" className="button" onClick={onClose}>
+            ביטול
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={mode === "existing" ? !targetId : !draft.name.trim()}
+            onClick={() => {
+              if (mode === "existing" ? !targetId : !draft.name.trim()) return;
+              onCreate(
+                type,
+                mode === "existing" ? targetId : null,
+                mode === "new" ? { ...draft, name: draft.name.trim() } : null,
+                type === "partner" ? { hebrewMarriageDate: hebrewMarriageDate.trim() || undefined } : undefined
+              );
+            }}
+          >
+            {mode === "existing" && selectedTargetPerson
+              ? `✓ חיבור ${selectedTargetPerson.name} כ${relationLabel}`
+              : `✓ שמירת ה${relationLabel}`}
+          </button>
+        </div>
+      </div>
     </div>
-  </div></div>;
+  );
 }
 
-function NewEntityPanel({ onClose, onCreate }: { onClose: () => void; onCreate: (person: NewPersonDetails) => void }) {
+function NewEntityPanel({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (person: NewPersonDetails) => void;
+}) {
   const [draft, setDraft] = useState<NewPersonDetails>({ name: "", gender: "neutral", isAlive: true });
   const update = <K extends keyof NewPersonDetails>(key: K, value: NewPersonDetails[K]) => setDraft(current => ({ ...current, [key]: value }));
-  return <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}><div className="panel"><div className="panel-header"><h2>הוספת אדם חדש לעץ</h2><button className="button ghost" onClick={onClose} aria-label="סגירה">✕</button></div><div className="form-grid">
-    <label className="field full">שם מלא (חובה)<input autoFocus value={draft.name} onChange={event => update("name", event.target.value)} /></label>
-    <label className="field">מגדר<select value={draft.gender} onChange={event => update("gender", event.target.value as Person["gender"])}><option value="neutral">לא צוין</option><option value="male">זכר</option><option value="female">נקבה</option></select></label>
-    <label className="field">סטטוס<select value={String(draft.isAlive)} onChange={event => update("isAlive", event.target.value === "true")}><option value="true">בחיים</option><option value="false">נפטר/ה</option></select></label>
-    <label className="field">שם משפחה קודם<input value={draft.previousLastName ?? ""} onChange={event => update("previousLastName", event.target.value || undefined)} /></label>
-    <label className="field">תפקיד<input value={draft.role ?? ""} onChange={event => update("role", event.target.value || undefined)} /></label>
-    <BirthDateFields birthDate={draft.birthDate} hebrewBirthDate={draft.hebrewBirthDate} onChange={(key, value) => update(key, value)} />
-    {!draft.isAlive && (
-      <>
-        <label className="field">שנת פטירה<input type="number" value={draft.deathYear ?? ""} onChange={event => update("deathYear", event.target.value ? Number(event.target.value) : undefined)} /></label>
-        <HebrewDateFields value={draft.hebrewDeathDate} label="תאריך פטירה עברי" onChange={value => update("hebrewDeathDate", value)} />
-      </>
-    )}
-    <label className="field">מקום לידה<input value={draft.birthCountry ?? ""} onChange={event => update("birthCountry", event.target.value || undefined)} /></label>
-    <label className="field">מקום קבורה<input value={draft.burialPlace ?? ""} onChange={event => update("burialPlace", event.target.value || undefined)} /></label>
-    <ProfileImageField value={draft.profileImageUrl} onChange={value => update("profileImageUrl", value)} />
-    <label className="field full">סיפור חיים<textarea rows={4} value={draft.lifeStory ?? ""} onChange={event => update("lifeStory", event.target.value || undefined)} /></label>
-    <div className="panel-actions full"><button className="button" onClick={onClose}>ביטול</button><button className="button primary" disabled={!draft.name.trim()} onClick={() => onCreate({ ...draft, name: draft.name.trim() })}>שמירת אדם</button></div>
-  </div></div></div>;
+
+  return (
+    <div className="overlay" role="dialog" aria-modal="true" onPointerDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="panel editor-panel">
+        <div className="panel-header">
+          <div>
+            <h2>✨ הוספת אדם חדש לעץ</h2>
+            <p className="modal-subtitle">יצירת אדם עצמאי או ענף חדש בעץ המשפחה</p>
+          </div>
+          <button type="button" className="button ghost" onClick={onClose} aria-label="סגירה">✕</button>
+        </div>
+
+        <PersonLivePreview person={draft} />
+
+        <PersonFormFields
+          draft={draft}
+          update={update}
+        />
+
+        <div className="panel-actions full sticky-actions">
+          <button type="button" className="button" onClick={onClose}>
+            ביטול
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={!draft.name.trim()}
+            onClick={() => onCreate({ ...draft, name: draft.name.trim() })}
+          >
+            ✓ שמירה והוספה לעץ
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function FamilyDirectoryView({
@@ -1465,7 +2103,6 @@ export default function HomePage() {
   });
   const [newEntityOpen, setNewEntityOpen] = useState(false);
   const [managePasswordOpen, setManagePasswordOpen] = useState(false);
-  const [lineagePersonId, setLineagePersonId] = useState<string | null>(null);
   const [graph, setGraph] = useState<FamilyGraph | null>(() => getCachedGoogleSheetGraph());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [explorerPersonId, setExplorerPersonId] = useState<string | undefined>(undefined);
@@ -1969,16 +2606,6 @@ export default function HomePage() {
         </div>
 
         <div className="topbar-actions">
-          <button
-            type="button"
-            className="button events-trigger"
-            onClick={() => setCalendarOpen(true)}
-            title="אירועים וימי הולדת החודש"
-          >
-            🎂 <span className="btn-label">אירועי החודש</span>
-            {currentMonthEvents.length > 0 && <span className="events-badge">{currentMonthEvents.length}</span>}
-          </button>
-
           {canEdit && (
             <button type="button" className="button primary" onClick={() => setNewEntityOpen(true)}>
               + <span className="btn-label">אדם חדש</span>
@@ -2003,6 +2630,16 @@ export default function HomePage() {
           >
             ❓
           </button>
+
+          <button
+            type="button"
+            className="button events-trigger"
+            onClick={() => setCalendarOpen(true)}
+            title="אירועים וימי הולדת החודש"
+          >
+            🎂 <span className="btn-label">אירועי החודש</span>
+            {currentMonthEvents.length > 0 && <span className="events-badge">{currentMonthEvents.length}</span>}
+          </button>
         </div>
       </div>
     </header>
@@ -2018,7 +2655,6 @@ export default function HomePage() {
           if (id) focusOnPerson(id);
           else setViewMode("canvas");
         }}
-        onShowLineage={id => setLineagePersonId(id)}
       />
     )}
 
@@ -2119,7 +2755,6 @@ export default function HomePage() {
         onSelectRelative={id => { setSelectedId(id); setSpouseFocusId(id); setExplorerPersonId(id); }}
         onFocusOnMap={() => { focusOnPerson(selected.id); setSelectedId(null); }}
         onOpenInExplorer={() => { setExplorerPersonId(selected.id); setViewMode("explorer"); setSelectedId(null); }}
-        onShowLineage={() => setLineagePersonId(selected.id)}
         onAddRelative={() => { const id = selected.id; setSelectedId(null); setAddMemberForId(id); }}
         onFilter={() => {
           const filteredLayout = calculateFamilyLayout(graphForFilter(selected.id), viewportWidth);
@@ -2132,15 +2767,6 @@ export default function HomePage() {
           setSpouseFocusId(null);
         }}
         onSave={savePerson}
-      />
-    )}
-
-    {lineagePersonId && graph.people.find(person => person.id === lineagePersonId) && (
-      <CumulativeFamilyTree
-        graph={graph}
-        root={graph.people.find(person => person.id === lineagePersonId)!}
-        onClose={() => setLineagePersonId(null)}
-        onOpenProfile={id => { setSelectedId(id); setSpouseFocusId(id); }}
       />
     )}
 
@@ -2159,7 +2785,16 @@ export default function HomePage() {
       <HebrewCalendarPanel
         date={calendarDate}
         events={monthlyEvents(graph, calendarDate)}
+        graph={graph}
         onChangeMonth={direction => setCalendarDate(current => shiftHebrewMonth(current, direction))}
+        onResetToCurrentMonth={() => {
+          const now = new Date();
+          const currentMonth = currentHebrewMonth(now);
+          const date = new Date(now);
+          date.setHours(12, 0, 0, 0);
+          if (currentHebrewMonth(date) !== currentMonth) date.setDate(date.getDate() + 1);
+          setCalendarDate(date);
+        }}
         onClose={() => setCalendarOpen(false)}
         onSelectPerson={id => {
           setExplorerPersonId(id);
