@@ -219,6 +219,137 @@ export function monthlyEvents(graph: FamilyGraph, date = new Date()): MonthlyEve
   return events.sort((left, right) => left.date.localeCompare(right.date, "he"));
 }
 
+export const STORY_KEY_TO_MATCHERS: Record<string, { exactIds?: string[]; nameKeywords: string[] }> = {
+  bentzion: {
+    exactIds: ["1a6bd34c-547f-468f-9562-79ebaf8f6a5c"],
+    nameKeywords: ["בן ציון אלבז", "בן ציון"],
+  },
+  nedjma: {
+    exactIds: ["60c70add-70a8-4f2f-a193-b255a0a042d4"],
+    nameKeywords: ["ניג'מה אלבז", "נג'מה אלבז", "ניגמה אלבז", "נגמה אלבז", "ניג'מה", "נג'מה"],
+  },
+  yaakov: {
+    exactIds: ["1783974161539"],
+    nameKeywords: ["יעקב אלבז"],
+  },
+  miriam: {
+    exactIds: ["1783884446224"],
+    nameKeywords: ["מרים אלבז"],
+  },
+  moshe_m: {
+    exactIds: ["1783966365046"],
+    nameKeywords: ["משה מוריס אמזלג", "משה אמזלג"],
+  },
+  perla: {
+    exactIds: ["1783966408171"],
+    nameKeywords: ["פרלה אמזלג", "פרלה"],
+  },
+  yitzhak_livnat: {
+    exactIds: ["1", "10"],
+    nameKeywords: ["יצחק אילון", "לבנת אילון"],
+  },
+  elazar: {
+    exactIds: ["elazar-elbaz-1936"],
+    nameKeywords: ["אלעזר אלבז"],
+  },
+  eliyahu: {
+    exactIds: ["a7b8534c-3aa2-46ff-871e-c23188b33393"],
+    nameKeywords: ["אליהו אלבז"],
+  },
+  saada: {
+    exactIds: ["caecd87a-f36b-4061-ba73-2cdd1b0683b4"],
+    nameKeywords: ["סעדה אלבז"],
+  },
+  mordechai_sr: {
+    exactIds: ["5f2fbe9d-b876-419a-b0f3-2ae43feee45e"],
+    nameKeywords: ["מרדכי אלבז"],
+  },
+  yosef_am: {
+    exactIds: ["97432ff8-ebfc-4cf2-bdac-3cf81f9a6165"],
+    nameKeywords: ["יוסף אמזלג"],
+  },
+  yosef_k: {
+    exactIds: ["60756090-6629-4f88-a2d9-5ef24f4c0953"],
+    nameKeywords: ["יוסף אלבז"],
+  },
+  moshe_d: {
+    exactIds: ["36107051-6bd9-4023-8519-476a39bce9e2"],
+    nameKeywords: ["משה אלבז"],
+  },
+  gamra: {
+    exactIds: ["74a0f66c-10b9-4e9d-8e45-37ef034d68c6"],
+    nameKeywords: ["גמרא אלבז", "גמרא"],
+  },
+  abraham_r: {
+    exactIds: ["abraham-elbaz-rabbi"],
+    nameKeywords: ["אברהם אלבז"],
+  },
+  abraham_z: {
+    exactIds: [],
+    nameKeywords: ["אברהם זנו"],
+  },
+  shalom_sh: {
+    exactIds: [],
+    nameKeywords: ["שלום שריקי"],
+  },
+};
+
+export function normalizeHebrewPersonName(name: string): string {
+  return (name || "")
+    .replace(/[\u0591-\u05BD\u05BF-\u05C7]/g, "")
+    .replace(/["'״׳“”‘’()\-–—.]/g, " ")
+    .replace(/\b(רבי|הרב|זצ״ל|זצל|ז״ל|זל|הי״ד|היד|ב״ר|בר|מרן|הקדוש|אל־קאייד|אל קאייד|לבית|הקדמון)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function findPersonInGraph(graph: FamilyGraph, identifier: string | null | undefined): Person | undefined {
+  if (!graph || !identifier) return undefined;
+  const trimmed = identifier.trim();
+  if (!trimmed) return undefined;
+
+  const byId = graph.people.find(p => p.id === trimmed);
+  if (byId) return byId;
+
+  const alias = STORY_KEY_TO_MATCHERS[trimmed.toLowerCase()];
+  if (alias) {
+    if (alias.exactIds) {
+      const byExactId = graph.people.find(p => alias.exactIds?.includes(p.id));
+      if (byExactId) return byExactId;
+    }
+    for (const kw of alias.nameKeywords) {
+      const found = findPersonInGraph(graph, kw);
+      if (found) return found;
+    }
+  }
+
+  const byExactName = graph.people.find(p => p.name.trim() === trimmed);
+  if (byExactName) return byExactName;
+
+  const normQ = normalizeHebrewPersonName(trimmed);
+  if (!normQ) return undefined;
+
+  const byNormExact = graph.people.find(p => normalizeHebrewPersonName(p.name) === normQ);
+  if (byNormExact) return byNormExact;
+
+  const byContainment = graph.people.find(p => {
+    const normP = normalizeHebrewPersonName(p.name);
+    return normP && (normP.includes(normQ) || normQ.includes(normP));
+  });
+  if (byContainment) return byContainment;
+
+  const queryWords = normQ.split(" ").filter(w => w.length > 1);
+  if (queryWords.length > 0) {
+    const byAllWords = graph.people.find(p => {
+      const normP = normalizeHebrewPersonName(p.name);
+      return queryWords.every(w => normP.includes(w));
+    });
+    if (byAllWords) return byAllWords;
+  }
+
+  return undefined;
+}
+
 export const demoGraph: FamilyGraph = {
   people: [
     { id: "1", familyId: "default", name: "אברהם כהן", role: "אב", birthYear: 1930, deathYear: 2010, isAlive: false, gender: "male", birthCountry: "מרוקו" },

@@ -67,6 +67,35 @@ function toPerson(raw: SheetPerson): Person {
   };
 }
 
+let memoryCachedGraph: FamilyGraph | null = null;
+
+export function getCachedGoogleSheetGraph(): FamilyGraph | null {
+  if (memoryCachedGraph) return memoryCachedGraph;
+  if (typeof window !== "undefined") {
+    try {
+      const stored = sessionStorage.getItem("family_tree_cached_graph");
+      if (stored) {
+        memoryCachedGraph = JSON.parse(stored) as FamilyGraph;
+        return memoryCachedGraph;
+      }
+    } catch {
+      // sessionStorage unavailable
+    }
+  }
+  return null;
+}
+
+export function setCachedGoogleSheetGraph(graph: FamilyGraph): void {
+  memoryCachedGraph = graph;
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem("family_tree_cached_graph", JSON.stringify(graph));
+    } catch {
+      // sessionStorage unavailable
+    }
+  }
+}
+
 export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
@@ -74,7 +103,9 @@ export async function fetchGoogleSheetGraph(): Promise<FamilyGraph> {
       const response = await fetch(API_URL, { cache: "no-store" });
       if (response.ok) {
         const data = await response.json() as { nodes?: SheetPerson[]; links?: Record<string, unknown>[] };
-        return parseGoogleSheetGraph(data);
+        const parsed = parseGoogleSheetGraph(data);
+        setCachedGoogleSheetGraph(parsed);
+        return parsed;
       }
       lastError = new GoogleSheetRequestError(response.status);
     } catch (error) {
@@ -143,6 +174,7 @@ export function parseGoogleSheetGraph(data: { nodes?: SheetPerson[]; links?: Rec
 }
 
 export async function saveGoogleSheetGraph(graph: FamilyGraph): Promise<void> {
+  setCachedGoogleSheetGraph(graph);
   const nodes = graph.people.map(person => ({
     id: person.id, name: person.name, previousLastName: person.previousLastName ?? "", role: person.role ?? "",
     birth: birthDateForStorage(person.birthDate) || String(person.birthYear ?? ""), birthDate: birthDateForStorage(person.birthDate), hebrewBirthDate: person.hebrewBirthDate ?? "", hebrewDeathDate: person.hebrewDeathDate ?? "", significantDates: person.significantDates, death: person.deathYear?.toString() ?? "", isAlive: person.isAlive,

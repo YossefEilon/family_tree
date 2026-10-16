@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { calculateFamilyLayout, edgePath, NODE_HEIGHT, NODE_WIDTH } from "@/lib/layout";
-import { ageLabel, currentHebrewMonth, descendants, formatBirthDate, isBirthdayInCurrentHebrewMonth, monthlyEvents, spouses, type FamilyGraph, type Person } from "@/lib/domain";
-import { fetchGoogleSheetGraph, GoogleSheetRequestError, saveGoogleSheetGraph } from "@/lib/google-sheet";
+import { ageLabel, currentHebrewMonth, descendants, findPersonInGraph, formatBirthDate, isBirthdayInCurrentHebrewMonth, monthlyEvents, spouses, type FamilyGraph, type Person } from "@/lib/domain";
+import { fetchGoogleSheetGraph, getCachedGoogleSheetGraph, GoogleSheetRequestError, saveGoogleSheetGraph } from "@/lib/google-sheet";
 import MobileFamilyTree, { Avatar, personMeta, relativesOf } from "./mobile-tree";
 
 type PersonStats = { children: number; descendants: number };
@@ -1465,7 +1466,7 @@ export default function HomePage() {
   const [newEntityOpen, setNewEntityOpen] = useState(false);
   const [managePasswordOpen, setManagePasswordOpen] = useState(false);
   const [lineagePersonId, setLineagePersonId] = useState<string | null>(null);
-  const [graph, setGraph] = useState<FamilyGraph | null>(null);
+  const [graph, setGraph] = useState<FamilyGraph | null>(() => getCachedGoogleSheetGraph());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [explorerPersonId, setExplorerPersonId] = useState<string | undefined>(undefined);
   const [addMemberForId, setAddMemberForId] = useState<string | null>(null);
@@ -1498,6 +1499,7 @@ export default function HomePage() {
   const svgRef = useRef<SVGSVGElement>(null);
   const didDrag = useRef(false);
   const didInitialFocus = useRef(false);
+  const lastFocusedPersonParam = useRef<string | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const panStart = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null);
   const pinchStart = useRef<{ distance: number; scale: number } | null>(null);
@@ -1543,22 +1545,85 @@ export default function HomePage() {
   useEffect(() => { const openAddMember = (event: Event) => { if (canEdit) setAddMemberForId((event as CustomEvent<string>).detail); }; window.addEventListener("family:add-member", openAddMember); return () => window.removeEventListener("family:add-member", openAddMember); }, [canEdit]);
   useEffect(() => { document.body.dataset.familyEdit = String(canEdit); return () => { delete document.body.dataset.familyEdit; }; }, [canEdit]);
 
-  const loadGraph = () => { setLoadError(null); void fetchGoogleSheetGraph().then(setGraph).catch(error => setLoadError(friendlyGraphLoadError(error))); };
-  useEffect(() => { loadGraph(); }, []);
+  const loadGraph = () => {
+    setLoadError(null);
+    void fetchGoogleSheetGraph()
+      .then(setGraph)
+      .catch(error => {
+        setGraph(current => {
+          if (!current) setLoadError(friendlyGraphLoadError(error));
+          return current;
+        });
+      });
+  };
+  useEffect(() => {
+    loadGraph();
+    fetch("/api/manage")
+      .then(res => (res.ok ? res.json() : { authorized: false }))
+      .then((json: { authorized?: boolean }) => {
+        if (json.authorized) setCanEdit(true);
+      })
+      .catch(() => {});
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get("view");
+      if (v === "explorer" || v === "directory" || v === "canvas") {
+        setViewMode(v);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    if (!graph || didInitialFocus.current) return;
-    const person = graph.people.find(candidate => candidate.name.trim() === "יצחק אילון") ?? graph.people[0];
+    if (!graph) return;
+    const urlPersonParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("person") : null;
+    if (didInitialFocus.current && (!urlPersonParam || urlPersonParam === lastFocusedPersonParam.current)) {
+      return;
+    }
+
+    const person = (urlPersonParam && findPersonInGraph(graph, urlPersonParam)) ||
+      graph.people.find(candidate => candidate.name.trim() === "יצחק אילון") ||
+      graph.people[0];
     if (!person) return;
+
     const fullLayout = calculateFamilyLayout(graph, viewportWidth);
     const positionedPerson = fullLayout.people.find(candidate => candidate.id === person.id);
-    if (!positionedPerson) return;
-    const initialScale = 4;
-    setScale(initialScale);
-    setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
+    if (positionedPerson) {
+      const initialScale = 4;
+      setScale(initialScale);
+      setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
+    }
+    if (urlPersonParam) {
+      setSelectedId(person.id);
+    }
     setSpouseFocusId(person.id);
     setExplorerPersonId(person.id);
+    lastFocusedPersonParam.current = urlPersonParam;
     didInitialFocus.current = true;
+  }, [graph, viewportWidth]);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      if (!graph) return;
+      const urlPersonParam = new URLSearchParams(window.location.search).get("person");
+      if (urlPersonParam && urlPersonParam !== lastFocusedPersonParam.current) {
+        const person = findPersonInGraph(graph, urlPersonParam);
+        if (person) {
+          const fullLayout = calculateFamilyLayout(graph, viewportWidth);
+          const positionedPerson = fullLayout.people.find(candidate => candidate.id === person.id);
+          if (positionedPerson) {
+            const initialScale = 4;
+            setScale(initialScale);
+            setOffset({ x: fullLayout.width / 2 - initialScale * positionedPerson.x, y: fullLayout.height / 2 - initialScale * positionedPerson.y });
+          }
+          setSelectedId(person.id);
+          setSpouseFocusId(person.id);
+          setExplorerPersonId(person.id);
+          lastFocusedPersonParam.current = urlPersonParam;
+        }
+      }
+    };
+    window.addEventListener("popstate", handleUrlChange);
+    return () => window.removeEventListener("popstate", handleUrlChange);
   }, [graph, viewportWidth]);
 
   const activeGraph = graph ?? { people: [], relationships: [] };
@@ -1814,7 +1879,15 @@ export default function HomePage() {
           {canEdit && <span className="status">מצב עריכה פעיל</span>}
         </div>
 
-        <nav className="view-switcher" aria-label="בחירת תצוגה">
+        <nav
+          className="view-switcher"
+          aria-label="בחירת תצוגה"
+          onWheel={e => {
+            if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+              e.currentTarget.scrollBy({ left: -e.deltaY, behavior: "auto" });
+            }
+          }}
+        >
           <button
             type="button"
             className={`view-tab ${viewMode === "canvas" ? "active" : ""}`}
@@ -1836,6 +1909,15 @@ export default function HomePage() {
           >
             📖 <span>אלפון</span>
           </button>
+          <Link
+            href="/stories"
+            prefetch
+            className="view-tab"
+            title="מסע השורשים — שושלות אלבז ואמזלג"
+            style={{ textDecoration: "none" }}
+          >
+            📜 <span>סיפורי המשפחות</span>
+          </Link>
         </nav>
       </div>
 
