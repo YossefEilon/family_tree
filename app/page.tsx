@@ -1868,7 +1868,15 @@ export default function HomePage() {
           {canEdit && <span className="status">מצב עריכה פעיל</span>}
         </div>
 
-        <nav className="view-switcher" aria-label="בחירת תצוגה">
+        <nav
+          className="view-switcher"
+          aria-label="בחירת תצוגה"
+          onWheel={e => {
+            if (e.deltaY !== 0 && e.currentTarget.scrollWidth > e.currentTarget.clientWidth) {
+              e.currentTarget.scrollBy({ left: -e.deltaY, behavior: "auto" });
+            }
+          }}
+        >
           <button
             type="button"
             className={`view-tab ${viewMode === "canvas" ? "active" : ""}`}
