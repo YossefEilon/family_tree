@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ageLabel, childrenOf, isBirthdayInCurrentHebrewMonth, spouses, type FamilyGraph, type Person } from "@/lib/domain";
 
 export type Relatives = { parents: Person[]; siblings: Person[]; partners: Person[]; children: Person[] };
@@ -144,18 +144,29 @@ function RelativesSection({
   );
 }
 
+function GenerationConnector() {
+  return (
+    <div className="explorer-connector" aria-hidden="true">
+      <div className="explorer-connector-line" />
+      <div className="explorer-connector-badge">
+        <span>↓</span>
+      </div>
+      <div className="explorer-connector-line" />
+    </div>
+  );
+}
+
 /**
  * Interactive step-by-step family explorer: one person in focus, relatives grouped around them.
  * Works seamlessly on both mobile and desktop.
  */
-export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPerson, onAddMember, onShowCanvas, onShowLineage }: {
+export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPerson, onAddMember, onShowCanvas }: {
   graph: FamilyGraph;
   initialId?: string;
   canEdit: boolean;
   onSelectPerson: (id: string) => void;
   onAddMember: (id: string) => void;
   onShowCanvas: (focusId?: string) => void;
-  onShowLineage?: (id: string) => void;
 }) {
   const peopleById = useMemo(() => new Map(graph.people.map(person => [person.id, person])), [graph]);
   const childCounts = useMemo(() => {
@@ -173,6 +184,8 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
   }, [graph, initialId, peopleById]);
   const [focusId, setFocusId] = useState<string | undefined>(defaultId);
   const [history, setHistory] = useState<string[]>([]);
+  const focusSectionRef = useRef<HTMLElement | null>(null);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
     if (initialId && peopleById.has(initialId) && initialId !== focusId) {
@@ -183,6 +196,32 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
   const focus = (focusId ? peopleById.get(focusId) : undefined) ?? (defaultId ? peopleById.get(defaultId) : undefined);
   const relatives = useMemo(() => (focus ? relativesOf(graph, focus.id) : { parents: [], siblings: [], partners: [], children: [] }), [graph, focus]);
   const hasAnyRelatives = relatives.parents.length + relatives.siblings.length + relatives.partners.length + relatives.children.length > 0;
+
+  // Whenever the focused entity changes, smoothly center it in the screen
+  useEffect(() => {
+    if (!focus?.id) return;
+    const target = focusSectionRef.current;
+    if (!target) return;
+
+    const timer = setTimeout(() => {
+      target.scrollIntoView({
+        behavior: isInitialMount.current ? "auto" : "smooth",
+        block: "center",
+        inline: "center",
+      });
+      isInitialMount.current = false;
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [focus?.id]);
+
+  const centerCurrentFocus = () => {
+    focusSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "center",
+    });
+  };
 
   const goTo = (id: string) => {
     if (!focus || focus.id === id) return;
@@ -245,7 +284,14 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
               </span>
             );
           })}
-          <strong className="explorer-breadcrumb-current">{focus.name}</strong>
+          <button
+            type="button"
+            className="explorer-breadcrumb-current-btn"
+            onClick={centerCurrentFocus}
+            title="מיקוד במרכז המסך"
+          >
+            <strong className="explorer-breadcrumb-current">{focus.name}</strong>
+          </button>
         </nav>
       )}
 
@@ -260,21 +306,37 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
             onFocus={goTo}
             onDetails={onSelectPerson}
           />
-          <div className="explorer-connector" aria-hidden="true"><span>↓</span></div>
+          <GenerationConnector />
         </>
       )}
 
-      <section className={`mobile-focus ${focus.gender}`} aria-label={`במוקד כעת: ${focus.name}`}>
+      <section
+        ref={focusSectionRef}
+        className={`mobile-focus ${focus.gender} focus-card-interactive`}
+        aria-label={`במוקד כעת: ${focus.name} — לחצו לפתיחת כרטיס מלא`}
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelectPerson(focus.id)}
+        onKeyDown={e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectPerson(focus.id);
+          }
+        }}
+      >
         <div className={`mobile-focus-banner ${focus.gender}`} aria-hidden="true" />
         <div className="mobile-focus-content">
           <div className="mobile-focus-badge-row">
             <span className="focus-pill">✨ במוקד כעת</span>
             {hasBirthday && <span className="focus-birthday-pill">🎂 חוגג/ת יום הולדת החודש</span>}
             {isDeceased && <span className="focus-deceased-pill">🕯️ לזכרו/ה</span>}
+            <span className="focus-interactive-hint" aria-hidden="true">
+              📋 לחצו על הכרטיס לפתיחה מלאה ↗
+            </span>
           </div>
 
           <div className="mobile-focus-main">
-            <div className="mobile-focus-avatar-col" onClick={() => onSelectPerson(focus.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onSelectPerson(focus.id); }}>
+            <div className="mobile-focus-avatar-col">
               <Avatar person={focus} size="large" />
             </div>
             <div className="mobile-focus-info">
@@ -286,29 +348,35 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
                 {focus.birthYear && <span className="focus-info-chip">📅 {focus.birthYear}{focus.deathYear ? `–${focus.deathYear}` : ""}</span>}
                 {focus.hebrewBirthDate && <span className="focus-info-chip">✡️ {focus.hebrewBirthDate}</span>}
                 {focus.birthCountry && <span className="focus-info-chip">📍 {focus.birthCountry}</span>}
-                {relatives.children.length > 0 && <span className="focus-info-chip">👶 {relatives.children.length} ילדים</span>}
+                {relatives.children.length > 0 && <span className="focus-info-chip">👶 {relatives.children.length} {relatives.children.length === 1 ? "ילד/ה" : "ילדים"}</span>}
               </div>
             </div>
           </div>
 
           {focus.lifeStory?.trim() && (
-            <div className="mobile-focus-story-box" onClick={() => onSelectPerson(focus.id)}>
-              <strong>📖 מתוך סיפור החיים:</strong>
+            <div className="mobile-focus-story-box">
+              <div className="story-box-header">
+                <strong>📖 מתוך סיפור החיים:</strong>
+                <span className="story-read-more">קריאה מלאה ↗</span>
+              </div>
               <p className="mobile-focus-story-preview">{focus.lifeStory}</p>
             </div>
           )}
 
-          <div className="mobile-focus-actions">
-            <button className="button primary" onClick={() => onSelectPerson(focus.id)}>
+          <div className="mobile-focus-actions" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => onSelectPerson(focus.id)}
+            >
               📋 פתיחת כרטיס מלא
             </button>
-            {onShowLineage && (
-              <button className="button" onClick={() => onShowLineage(focus.id)}>
-                🌿 עץ דורות
-              </button>
-            )}
             {canEdit && (
-              <button className="button accent-outline" onClick={() => onAddMember(focus.id)}>
+              <button
+                type="button"
+                className="button accent-outline"
+                onClick={() => onAddMember(focus.id)}
+              >
                 + הוספת קשר משפחתי
               </button>
             )}
@@ -336,7 +404,7 @@ export default function MobileFamilyTree({ graph, initialId, canEdit, onSelectPe
 
       {relatives.children.length > 0 && (
         <>
-          <div className="explorer-connector" aria-hidden="true"><span>↓</span></div>
+          <GenerationConnector />
           <RelativesSection
             title="ילדים (הדור הבא)"
             icon="⬇️"
