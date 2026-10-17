@@ -52,3 +52,14 @@ npm run build
 ```
 
 The former zero-build `index.html`, `js/`, and `css/` architecture has been removed. The Next.js app is the only application entry point.
+
+## Android app (PWA)
+
+The site is an installable Progressive Web App for Chrome on Android:
+
+- `app/manifest.ts` — web app manifest (`/manifest.webmanifest`), Hebrew/RTL, standalone display
+- `app/pwa-icon/[variant]/route.tsx` — PNG icons (regular + maskable) generated at build time
+- `public/sw.js` — service worker: offline fallback (`/offline`), cached static assets, network-first graph/stories data
+- `app/pwa-provider.tsx` — registers the service worker (production only) and shows a Hebrew install banner
+
+To install: open the production URL in Chrome on Android → tap the install banner, or ⋮ → **Install app**. Bump `VERSION` in `public/sw.js` when changing caching behavior.
