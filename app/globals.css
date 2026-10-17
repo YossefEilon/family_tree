@@ -2152,10 +2152,24 @@ button { cursor: pointer; }
   flex-direction: column;
   gap: 0.85rem;
   overflow-y: auto;
-  flex: 1;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  /* min-height: 0 lets the list shrink inside the max-height panel so it scrolls instead of being clipped. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Fixed chrome above the list must never shrink. */
+.calendar-panel > .calendar-panel-header,
+.calendar-panel > .calendar-heading,
+.calendar-panel > .calendar-filter-bar,
+.calendar-panel > .calendar-empty-state {
+  flex-shrink: 0;
 }
 
 .calendar-event-card {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
