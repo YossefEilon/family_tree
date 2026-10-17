@@ -2152,10 +2152,24 @@ button { cursor: pointer; }
   flex-direction: column;
   gap: 0.85rem;
   overflow-y: auto;
-  flex: 1;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  /* min-height: 0 lets the list shrink inside the max-height panel so it scrolls instead of being clipped. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Fixed chrome above the list must never shrink. */
+.calendar-panel > .calendar-panel-header,
+.calendar-panel > .calendar-heading,
+.calendar-panel > .calendar-filter-bar,
+.calendar-panel > .calendar-empty-state {
+  flex-shrink: 0;
 }
 
 .calendar-event-card {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -5346,5 +5360,81 @@ img.mobile-avatar { object-fit: cover; }
     padding: 16px 14px;
     border-radius: 16px;
     max-height: 92dvh;
+  }
+}
+
+/* ---------- PWA (installable Android app) ---------- */
+.pwa-install {
+  position: fixed;
+  inset-inline: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(23, 32, 51, 0.18);
+  max-width: 520px;
+  margin-inline: auto;
+}
+.pwa-install-icon { border-radius: 10px; flex-shrink: 0; }
+.pwa-install-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 0.9rem; }
+.pwa-install-text span { color: var(--muted); font-size: 0.8rem; }
+.pwa-install-accept {
+  background: var(--brand);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pwa-install-dismiss {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.pwa-offline {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.pwa-offline-card {
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 32px 24px;
+  max-width: 360px;
+}
+.pwa-offline-icon { font-size: 2.5rem; }
+.pwa-offline-card p { color: var(--muted); }
+.pwa-offline-retry {
+  display: inline-block;
+  margin-top: 12px;
+  background: var(--brand);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 20px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* Respect device notches/gesture bars when launched as a standalone app. */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    overscroll-behavior-y: none;
   }
 }
