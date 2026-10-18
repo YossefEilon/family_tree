@@ -14,6 +14,42 @@ import { storyPortraits } from "@/lib/stories-portraits";
 
 const LOCAL_STORAGE_KEY = "family_stories_custom_data";
 
+function renderWithLinks(text: string): React.ReactNode {
+  if (!text || typeof text !== "string") return text;
+  const regex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  if (!regex.test(text)) return text;
+
+  regex.lastIndex = 0;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const label = match[1];
+    const url = match[2];
+    parts.push(
+      <a
+        key={`${match.index}-${url}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "#b86b28", textDecoration: "underline", wordBreak: "break-word" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {label}
+      </a>
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts;
+}
+
 export default function StoriesPage() {
   const [data, setData] = useState<StoriesData>(initialStoriesData);
   const [activeTab, setActiveTab] = useState<"overview" | "elbaz" | "amzalag" | "atlas" | "generations">("overview");
@@ -630,13 +666,13 @@ export default function StoriesPage() {
                   <h3>{currentElbazChapter.title}</h3>
 
                   {currentElbazChapter.body.map((paragraph, pIdx) => (
-                    <p key={pIdx}>{paragraph}</p>
+                    <p key={pIdx}>{renderWithLinks(paragraph)}</p>
                   ))}
 
                   {currentElbazChapter.quote && (
                     <blockquote className="stage-quote">
-                      {currentElbazChapter.quote}
-                      {currentElbazChapter.cite && <cite>— {currentElbazChapter.cite}</cite>}
+                      {renderWithLinks(currentElbazChapter.quote)}
+                      {currentElbazChapter.cite && <cite>— {renderWithLinks(currentElbazChapter.cite)}</cite>}
                     </blockquote>
                   )}
 
@@ -645,7 +681,7 @@ export default function StoriesPage() {
                       {currentElbazChapter.highlights.map((h, hIdx) => (
                         <div key={hIdx} className="hi-box">
                           <span>{h.label}</span>
-                          <strong>{h.val}</strong>
+                          <strong>{renderWithLinks(h.val)}</strong>
                         </div>
                       ))}
                     </div>
@@ -766,13 +802,13 @@ export default function StoriesPage() {
                   <h3>{currentAmzalagChapter.title}</h3>
 
                   {currentAmzalagChapter.body.map((paragraph, pIdx) => (
-                    <p key={pIdx}>{paragraph}</p>
+                    <p key={pIdx}>{renderWithLinks(paragraph)}</p>
                   ))}
 
                   {currentAmzalagChapter.quote && (
                     <blockquote className="stage-quote">
-                      {currentAmzalagChapter.quote}
-                      {currentAmzalagChapter.cite && <cite>— {currentAmzalagChapter.cite}</cite>}
+                      {renderWithLinks(currentAmzalagChapter.quote)}
+                      {currentAmzalagChapter.cite && <cite>— {renderWithLinks(currentAmzalagChapter.cite)}</cite>}
                     </blockquote>
                   )}
 
@@ -781,7 +817,7 @@ export default function StoriesPage() {
                       {currentAmzalagChapter.highlights.map((h, hIdx) => (
                         <div key={hIdx} className="hi-box">
                           <span>{h.label}</span>
-                          <strong>{h.val}</strong>
+                          <strong>{renderWithLinks(h.val)}</strong>
                         </div>
                       ))}
                     </div>
@@ -901,19 +937,19 @@ export default function StoriesPage() {
                   <p style={{ margin: "0 0 14px", color: "var(--amber, #b86b28)", fontWeight: 700, fontSize: "0.94rem" }}>
                     {currentStation.region}
                   </p>
-                  <p style={{ margin: "0 0 18px" }}>{currentStation.desc}</p>
+                  <p style={{ margin: "0 0 18px" }}>{renderWithLinks(currentStation.desc)}</p>
 
                   <div style={{ background: "var(--bg-alt, #f2ebe0)", padding: "16px 20px", borderRadius: "14px", marginBottom: "16px" }}>
                     <strong style={{ display: "block", marginBottom: "8px" }}>דמויות המשפחה בתחנה זו:</strong>
                     <ul style={{ margin: 0, paddingRight: "20px", color: "var(--muted)" }}>
                       {currentStation.figures.map((fig, fIdx) => (
-                        <li key={fIdx}>{fig}</li>
+                        <li key={fIdx}>{renderWithLinks(fig)}</li>
                       ))}
                     </ul>
                   </div>
 
                   <div style={{ borderTop: "1px solid #e2d9c8", paddingTop: "14px", fontSize: "0.92rem" }}>
-                    <strong>ציוני זיכרון ובתי עלמין:</strong> {currentStation.memorial}
+                    <strong>ציוני זיכרון ובתי עלמין:</strong> {renderWithLinks(currentStation.memorial)}
                   </div>
                 </div>
               )}
@@ -955,8 +991,8 @@ export default function StoriesPage() {
                     {activeChain.nodes.map((node, nIdx) => (
                       <div key={nIdx} className="chain-node">
                         <small>{node.gen}</small>
-                        <strong>{node.name}</strong>
-                        <span>{node.info}</span>
+                        <strong>{renderWithLinks(node.name)}</strong>
+                        <span>{renderWithLinks(node.info)}</span>
                       </div>
                     ))}
                   </div>
@@ -1060,10 +1096,10 @@ export default function StoriesPage() {
                       </span>
                     </div>
                     <div className="member-dates">{p.dates}</div>
-                    <p className="member-bio">{p.bio}</p>
+                    <p className="member-bio">{renderWithLinks(p.bio)}</p>
                   </div>
                   <div className="member-foot">
-                    <span>📍 {p.burial}</span>
+                    <span>📍 {renderWithLinks(p.burial)}</span>
                     <strong style={{ color: "#b86b28" }}>לכרטיס המלא ←</strong>
                   </div>
                 </article>
@@ -1112,18 +1148,18 @@ export default function StoriesPage() {
             )}
 
             <p style={{ color: "#b86b28", fontWeight: 700, margin: "0 0 12px" }}>{selectedPerson.dates}</p>
-            <p style={{ margin: "0 0 16px", fontSize: "1rem", lineHeight: 1.6 }}>{selectedPerson.bio}</p>
+            <p style={{ margin: "0 0 16px", fontSize: "1rem", lineHeight: 1.6 }}>{renderWithLinks(selectedPerson.bio)}</p>
 
             <div style={{ background: "#f2ebe0", padding: "14px 16px", borderRadius: "12px", marginBottom: "12px" }}>
               <strong>קשרי משפחה בעץ:</strong>
               <br />
-              <span style={{ fontSize: "0.92rem", color: "var(--muted)" }}>{selectedPerson.rel}</span>
+              <span style={{ fontSize: "0.92rem", color: "var(--muted)" }}>{renderWithLinks(selectedPerson.rel)}</span>
             </div>
 
             <div style={{ background: "#f2ebe0", padding: "14px 16px", borderRadius: "12px", marginBottom: "18px" }}>
               <strong>מקום קבורה / מושב:</strong>
               <br />
-              <span style={{ fontSize: "0.92rem", color: "var(--muted)" }}>{selectedPerson.burial}</span>
+              <span style={{ fontSize: "0.92rem", color: "var(--muted)" }}>{renderWithLinks(selectedPerson.burial)}</span>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>

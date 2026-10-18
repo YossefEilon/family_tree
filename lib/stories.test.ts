@@ -34,6 +34,7 @@ describe("Family Stories Data", () => {
     expect(Object.keys(initialStoriesData.nameChains)).toContain("yosef");
     expect(Object.keys(initialStoriesData.nameChains)).toContain("yaakov");
     expect(Object.keys(initialStoriesData.nameChains)).toContain("miriam");
+    expect(Object.keys(initialStoriesData.nameChains)).toContain("yitzhak_matriarchs");
   });
 
   it("includes founding portraits matching storyPortraits dictionary", () => {
