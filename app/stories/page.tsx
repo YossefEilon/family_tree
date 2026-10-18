@@ -422,42 +422,6 @@ export default function StoriesPage() {
         {activeTab === "overview" && (
           <section>
             <div className="convergence-banner">
-              {/* Amzalag Wing */}
-              <article className="wing-card amzalag-wing">
-                <div>
-                  <span className="wing-tag">הענף המערבי · מרוקו וספרד</span>
-                  <h2>בית אמזלג ובית שריקי</h2>
-                  <p>
-                    משורשי הצורפים וחרשי הכסף של מרוקו (<em>Amzallag</em>) וצאצאי מגורשי ולנסיה ומבצר שֶׁרִיקָה (
-                    <em>Chriqui</em>). שתי משפחות שהתבססו בעיר הנמל קזבלנקה, צלחו את תקופת שלטון וישי במלחמת העולם
-                    השנייה, התאחדו בנישואי <strong>משה (מוריס) אמזלג</strong> ו<strong>פרלה שריקי</strong> ב־1952, ועלו
-                    לישראל ב״מבצע יכין״ בשנת 1964.
-                  </p>
-                </div>
-                <button className="wing-cta" type="button" onClick={() => setActiveTab("amzalag")}>
-                  לסיפור המלא של אמזלג ושריקי ←
-                </button>
-              </article>
-
-              {/* Union Bridge */}
-              <div className="union-bridge">
-                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#163a47" }}>נקודת האיחוד ההיסטורית</span>
-                <strong>יצחק אילון (אמזלג) &amp; לבנת אלבז</strong>
-                <span>נישאו בכ״ג באלול תשמ״א (1981)</span>
-                <p style={{ fontSize: "0.84rem", color: "var(--muted)", margin: "10px 0 0" }}>
-                  איחוד שני הנתיבים מצפון אפריקה לשושלת משפחת אילון בישראל — 9 ילדים ועשרות נכדים הנושאים את שמות האבות
-                  והאמהות מדמנאת, אפלו וקזבלנקה.
-                </p>
-                <Link
-                  href="/?person=yitzhak_livnat"
-                  prefetch
-                  className="wing-cta"
-                  style={{ marginTop: "14px", alignSelf: "center", textDecoration: "none" }}
-                >
-                  צפה בעץ המשפחה 🌳
-                </Link>
-              </div>
-
               {/* Elbaz Wing */}
               <article className="wing-card elbaz-wing">
                 <div>
@@ -474,6 +438,44 @@ export default function StoriesPage() {
                 </div>
                 <button className="wing-cta" type="button" onClick={() => setActiveTab("elbaz")}>
                   לסיפור המלא של אלבז וזנו ←
+                </button>
+              </article>
+
+              {/* Union Bridge */}
+              <div className="union-bridge">
+                <div>
+                  <span className="wing-tag">נקודת האיחוד ההיסטורית</span>
+                  <h2>יצחק אילון (אמזלג) &amp; לבנת אלבז</h2>
+                  <span className="union-date">נישאו בכ״ג באלול תשמ״א (1981)</span>
+                  <p>
+                    איחוד שני הנתיבים מצפון אפריקה לשושלת משפחת אילון בישראל — 9 ילדים ועשרות נכדים הנושאים את שמות האבות
+                    והאמהות מדמנאת, אפלו וקזבלנקה.
+                  </p>
+                </div>
+                <Link
+                  href="/?person=yitzhak_livnat"
+                  prefetch
+                  className="wing-cta"
+                  style={{ textDecoration: "none" }}
+                >
+                  צפה בעץ המשפחה 🌳
+                </Link>
+              </div>
+
+              {/* Amzalag Wing */}
+              <article className="wing-card amzalag-wing">
+                <div>
+                  <span className="wing-tag">הענף המערבי · מרוקו וספרד</span>
+                  <h2>בית אמזלג ובית שריקי</h2>
+                  <p>
+                    משורשי הצורפים וחרשי הכסף של מרוקו (<em>Amzallag</em>) וצאצאי מגורשי ולנסיה ומבצר שֶׁרִיקָה (
+                    <em>Chriqui</em>). שתי משפחות שהתבססו בעיר הנמל קזבלנקה, צלחו את תקופת שלטון וישי במלחמת העולם
+                    השנייה, התאחדו בנישואי <strong>משה (מוריס) אמזלג</strong> ו<strong>פרלה שריקי</strong> ב־1952, ועלו
+                    לישראל ב״מבצע יכין״ בשנת 1964.
+                  </p>
+                </div>
+                <button className="wing-cta" type="button" onClick={() => setActiveTab("amzalag")}>
+                  לסיפור המלא של אמזלג ושריקי ←
                 </button>
               </article>
             </div>
